@@ -1,6 +1,6 @@
 module Core
 
-export laplacian, σ, whichRegion, trapz, dirac_δ, heaviside_Θ, processInputs
+export laplacian, σ, whichRegion, trapz, dirac_δ, heaviside_Θ, processInputs, computeCFs_Core
 
 #############################################################
 
@@ -21,7 +21,7 @@ end # end of function grad
 
 function laplacian(ℓ::Float64,N::Int,Σ)
 
-    dx = ℓ/N; dx² = dx^2
+    dx = ℓ/(N-1); dx² = dx^2
     ∇ = grad(N-1,dx)
 
     s₁ = sparse(1:N-1,1:N-1,2./( Σ[1:end-1] + Σ[2:end] ),N-1,N-1)
@@ -44,9 +44,9 @@ function σ(x,∂,λ)
 
     for i in 1:length(r)
         if r[i] == 1
-            s[i] = (1/.5/mean(λ))*abs2(x[i]-∂[2])/mean(λ)^2
+            s[i] = (2/mean(λ))*abs2(x[i]-∂[2])/mean(λ)^2
         elseif r[i] == length(∂)-1
-            s[i] = (1/.5/mean(λ))*abs2(x[i]-∂[end-1])/mean(λ)^2
+            s[i] = (2/mean(λ))*abs2(x[i]-∂[end-1])/mean(λ)^2
         else
             s[i] = 0
         end
@@ -153,17 +153,19 @@ function processInputs()
     (N, λ₀, λ, ∂, Γ, F, ɛ, xᵨ₊, xᵨ₋, γ⟂, D₀, a) = evalfile("SALT_1d_Inputs.jl")
 
     ω₀ = 2π./λ₀
-    ω  = 2π./λ
+    ω = 2π./λ
+    k = ω
+    k₀ = ω₀
     ℓ = ∂[end] - ∂[1]
 
     ##########################
 
     dx = ℓ/(N-1);
     n = 1/dx
-    dN1 = ceil(Integer,5.0*λ₀*n)
+    dN1 = ceil(Integer,2.5*λ₀*n)
     dN2 = ceil(Integer,0.25*λ₀*n)
     N_ext = N + 2(dN1+dN2)
-    ℓ_ext = dx*N_ext
+    ℓ_ext = dx*(N_ext-1)
 
     x_ext = vcat(-[(dN1+dN2):-1:1;]*dx+∂[1],  linspace(∂[1],∂[end],N), [1:(dN1+dN2);]*dx+∂[end])
     x_inds = dN1+dN2+collect(1:N)
@@ -183,6 +185,8 @@ function processInputs()
         "λ₀" => λ₀,
         "ω" => ω,
         "ω₀" => ω₀,
+        "k" => k,
+        "k₀" => k₀,
         "N" => N,
         "ℓ" => ℓ,
         "dx" => dx,
@@ -211,6 +215,61 @@ function processInputs()
 
 end 
 # end of function processInputs
+
+
+function computeCFs_Core(inputs::Dict, k::Number, nTCFs::Int; F=1., η_init = [], ψ_init = [])
+# No Line Pulling, calculation independent of pump D
+
+    ## definitions block
+    dx = inputs["dx"]
+    x_ext = inputs["x_ext"]
+    ∂_ext = inputs["∂_ext"]
+    ℓ_ext = inputs["ℓ_ext"]
+    N_ext = inputs["N_ext"]
+    λ = inputs["λ"]
+    x_inds = inputs["x_inds"]
+    F_ext = inputs["F_ext"]
+    Γ_ext = inputs["Γ_ext"]
+    ɛ_ext = inputs["ɛ_ext"]
+    ##
+    
+    k²= k^2
+
+    r = whichRegion(x_ext,∂_ext)
+
+    ∇² = laplacian(ℓ_ext, N_ext, 1+1im*σ(x_ext,∂_ext,λ)/k)
+
+    Γ = zeros(N_ext,1)
+    for dd in 2:length(∂_ext)-1
+        δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
+        Γ = Γ[:] + full(δ)/Γ_ext[dd]
+    end
+
+    ɛk² = sparse(1:N_ext, 1:N_ext, ɛ_ext[r]*k²   ,N_ext, N_ext, +)
+    Γk² = sparse(1:N_ext, 1:N_ext, Γ[:]*k²       , N_ext, N_ext, +)
+    sF = sparse(1:N_ext, 1:N_ext, sign(F.*F_ext[r]), N_ext, N_ext, +)
+    FF = sparse(1:N_ext, 1:N_ext, abs(F.*F_ext[r]), N_ext, N_ext, +)
+
+    if isempty(η_init) & isempty(ψ_init)
+        (η,ψ_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²+Γk²)/k²,FF, which = :LM, nev = nTCFs, sigma = 1e-8)
+    elseif !isempty(η_init) & isempty(ψ_init)
+        (η,ψ_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²+Γk²)/k²,FF, which = :LM, nev = nTCFs, sigma = η_init)
+    elseif !isempty(η_init) & !isempty(ψ_init)
+        (η,ψ_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²+Γk²)/k²,FF, which = :LM, nev = nTCFs, sigma = η_init, v0 = ψ_init)
+    end
+
+    ψ = zeros(Complex128,length(inputs["x_ext"]),nTCFs)
+
+    for ii = 1:length(η)
+        N = trapz(ψ_ext[:,ii].*F.*F_ext[r].*ψ_ext[:,ii],dx)
+        ψ_ext[:,ii] = ψ_ext[:,ii]/sqrt(N)
+        ψ[:,ii] = ψ_ext[:,ii]
+    end
+
+    return η,ψ
+
+end
+#end of function computeCFs_Core
 
 #######################################################################
 
