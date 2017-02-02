@@ -534,7 +534,11 @@ function computeS(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispO
         k = inputs["k"][ii]
 
         if (ii/1 == round(ii/1)) & dispOpt
-            printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}.",ii,length(inputs["k"]),k)
+            if typeof(k)<:Real
+                printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}.",ii,length(inputs["k"]),k)
+            else
+                printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}{4:+2.3f}i.",ii,length(inputs["k"]),real(k),imag(k))
+            end
         end
 
         if isempty(ψ_init)
