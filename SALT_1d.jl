@@ -79,7 +79,7 @@ function computePolesL(inputs::Dict, k::Number, nPoles::Int; F=1., truncate = fa
     end
     for ii = 1:length(k²)
 
-        N = trapz(ψ_ext[inds1,ii].*(inputs["ɛ"][r1]+Γ[inds1]-1im*D₀.*F_temp.*inputs["F"][r1]).*ψ_ext[inds1,ii],dx)
+        N = trapz((inputs["ɛ"][r1]+Γ[inds1]-1im*D₀.*F_temp.*inputs["F"][r1]).*abs2(ψ_ext[inds1,ii]),dx)
         ψ_ext[:,ii] = ψ_ext[:,ii]/sqrt(N)
         ψ[:,ii] = ψ_ext[:,ii]
     end
