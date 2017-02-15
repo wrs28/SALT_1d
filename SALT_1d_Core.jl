@@ -1,6 +1,6 @@
 module Core
 
-export laplacian, σ, whichRegion, trapz, dirac_δ, heaviside_Θ, processInputs, computeCFs_Core
+export laplacian, σ, whichRegion, trapz, dirac_δ, heaviside_Θ, processInputs, updateInputs, computeCFs_Core
 
 #############################################################
 
@@ -63,8 +63,18 @@ function whichRegion(x,∂)
 
     for i in 1:length(region), k in 1:length(∂)-1
 
-        if  ∂[k] ≤ x[i] ≤ ∂[k+1]
-            region[i] = k
+        if k+1 == length(∂)
+            if  ∂[k] ≤ x[i]
+                region[i] = k
+            end
+        elseif k == 1
+            if  x[i] ≤ ∂[k+1]
+                region[i] = k
+            end
+        else
+            if  ∂[k] ≤ x[i] ≤ ∂[k+1]
+                region[i] = k
+            end
         end
 
     end
@@ -158,6 +168,9 @@ function processInputs()
     k₀ = ω₀
     ℓ = ∂[end] - ∂[1]
 
+    xᵨ₊ = (∂[1]+∂[2])/2
+    xᵨ₋ = (∂[end-1]+∂[end])/2
+    
     ##########################
 
     dx = ℓ/(N-1);
@@ -167,6 +180,7 @@ function processInputs()
     N_ext = N + 2(dN1+dN2)
     ℓ_ext = dx*(N_ext-1)
 
+#    x_ext = linspace(-(dN1+dN2)*dx+∂[1], (dN1+dN2)*dx+∂[end], N_ext)
     x_ext = vcat(-[(dN1+dN2):-1:1;]*dx+∂[1],  linspace(∂[1],∂[end],N), [1:(dN1+dN2);]*dx+∂[end])
     x_inds = dN1+dN2+collect(1:N)
     x = x_ext[x_inds]
@@ -215,6 +229,87 @@ function processInputs()
 
 end 
 # end of function processInputs
+
+
+
+function updateInputs(inputs)
+
+    ∂ = inputs["∂"]
+    N = inputs["N"]
+    λ₀ = inputs["λ₀"]
+    λ = inputs["λ"]
+    F = inputs["F"]
+    ɛ = inputs["ɛ"]
+    Γ = inputs["Γ"]
+    
+    xᵨ₊ = (∂[1]+∂[2])/2
+    xᵨ₋ = (∂[end-1]+∂[end])/2
+    
+    ω₀ = 2π./λ₀
+    ω = 2π./λ
+    k = ω
+    k₀ = ω₀
+    ℓ = ∂[end] - ∂[1]
+
+    ##########################
+
+    dx = ℓ/(N-1);
+    n = 1/dx
+    dN1 = ceil(Integer,2.5*λ₀*n)
+    dN2 = ceil(Integer,0.25*λ₀*n)
+    N_ext = N + 2(dN1+dN2)
+    ℓ_ext = dx*(N_ext-1)
+
+    x_ext = vcat(-[(dN1+dN2):-1:1;]*dx+∂[1],  linspace(∂[1],∂[end],N), [1:(dN1+dN2);]*dx+∂[end])
+    x_inds = dN1+dN2+collect(1:N)
+    x = x_ext[x_inds]
+
+    ∂_ext = [x_ext[1]-dx/2 x_ext[dN1+1] ∂ x_ext[dN1+dN2+N+dN2+1] x_ext[end]+dx/2]
+
+    F_min = 1e-15
+    F[F .== zero(Float64)] = F_min
+    F_ext = [F_min F_min F F_min F_min]
+
+    ɛ_ext = [1 1 ɛ 1 1]
+    Γ_ext = [Inf Inf  Γ Inf Inf]
+
+    inputsNew = Dict{Any,Any}(
+        "λ" => λ,
+        "λ₀" => λ₀,
+        "ω" => ω,
+        "ω₀" => ω₀,
+        "k" => k,
+        "k₀" => k₀,
+        "N" => N,
+        "ℓ" => ℓ,
+        "dx" => dx,
+        "x_ext" => x_ext,
+        "x_inds" => x_inds,
+        "∂" => ∂,
+        "ɛ" => ɛ,
+        "F" => F,
+        "N_ext" => N_ext,
+        "ℓ_ext" => ℓ_ext,
+        "∂_ext" => ∂_ext,
+        "ɛ_ext" => ɛ_ext,
+        "F_ext" => F_ext,
+        "x" => x,
+        "xᵨ₋" => xᵨ₋,
+        "xᵨ₊" => xᵨ₊,
+        "γ⟂" => inputs["γ⟂"],
+        "D₀" => inputs["D₀"],
+        "a" => inputs["a"],
+        "Γ" => Γ,
+        "Γ_ext" => Γ_ext,
+        "dN1" => dN1,
+        "dN2" => dN2)
+
+    return(inputsNew)
+
+end 
+# end of function updateInputs
+
+
 
 
 function computeCFs_Core(inputs::Dict, k::Number, nTCFs::Int; F=1., η_init = [], ψ_init = [])

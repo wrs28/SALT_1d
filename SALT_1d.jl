@@ -1,6 +1,6 @@
 module SALT_1d
 
-export processInputs, computePolesL, computePolesNL1, computePolesNL2, computeZerosL, computeZerosNL1, computeZerosNL2, computeCFs, solve_SPA, solve_scattered, solve_single_mode_lasing, solve_CPA, computeS, bootstrap, CF_analysis, CF_synthesis, computeZerosL2
+export processInputs, updateInputs, computePolesL, computePolesNL1, computePolesNL2, computeZerosL, computeZerosNL1, computeZerosNL2, computeCFs, solve_SPA, solve_scattered, solve_single_mode_lasing, solve_CPA, computeS, bootstrap, CF_analysis, CF_synthesis, computeZerosL2
 
 include("SALT_1d_Core.jl")
 
@@ -333,7 +333,7 @@ end
 
 
 
-function computeZerosNL2(inputs::Dict, k, Radii; Nq=100, nZeros=3, F=1., R_min = .01)
+function computeZerosNL2(inputs::Dict, k::Number, Radii; Nq=100, nZeros=3, F=1., R_min = .01)
     
     inputs1 = deepcopy(inputs)
     
