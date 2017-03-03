@@ -307,7 +307,6 @@ function computePolesNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=10
     end
 
     if flag
-        A = A-AA
         A₀ = A₀-AA₀
         A₁ = A₁-AA₁
     end

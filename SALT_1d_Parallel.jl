@@ -1,8 +1,9 @@
 module SALT_1d_Parallel
 
-export computeS_parallel, computeS_parallel! #, computePolesL_parallel, computeZerosL_parallel
+export computeS_parallel, computeS_parallel!, computePolesNL2_parallel, computeZerosNL2_parallel
 
 using SALT_1d
+using SALT_1d.Core
 
 
 
@@ -60,6 +61,155 @@ function computeS_parallel_core!(S::SharedArray, inputs::Dict; N=10, N_Type="D",
     S[:,:,k_inds,:] = computeS(inputs1; N=N, N_Type=N_Type, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt)
     
 end # end of function computeS_parallel_core
+
+
+
+
+function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=1., R_min = .01)
+    # With Line Pulling, using contour integration
+
+    nevals = nPoles
+    rank_tol = 2e-4
+
+    ## definitions block
+    dx = inputs["dx"]
+    x_ext = inputs["x_ext"]
+    ∂_ext = inputs["∂_ext"]
+    ℓ_ext = inputs["ℓ_ext"]
+    N_ext = inputs["N_ext"]
+    λ = inputs["λ"]
+    x_inds = inputs["x_inds"]
+    F_ext = inputs["F_ext"]
+    D₀ = inputs["D₀"]
+    ɛ_ext = inputs["ɛ_ext"]
+    Γ_ext = inputs["Γ_ext"]
+    ##end of definitions block
+
+    r = whichRegion(x_ext,∂_ext)
+
+    Γ = zeros(N_ext,1)
+    for dd in 2:length(∂_ext)-1
+        δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
+        Γ = Γ[:] + full(δ)/Γ_ext[dd]
+    end
+
+    ∇² = laplacian(ℓ_ext, N_ext, 1+1im*σ(x_ext,∂_ext,λ)/k)
+    ɛ = sparse(1:N_ext, 1:N_ext, ɛ_ext[r], N_ext, N_ext, +)
+    Γ = sparse(1:N_ext, 1:N_ext, Γ[:]    , N_ext, N_ext, +)
+
+    function γ(k′)
+        return inputs["γ⟂"]/(k′-inputs["k₀"]+1im*inputs["γ⟂"])
+    end
+
+    rad(a,b,θ) = b./sqrt(sin(θ).^2+(b/a)^2.*cos(θ).^2)
+    θ = angle(inputs["k₀"]-1im*inputs["γ⟂"]-k)
+    flag = abs(inputs["k₀"]-1im*inputs["γ⟂"]-k) < rad(Radii[1],Radii[2],θ)
+    
+    M = rand(N_ext,nevals)
+    ϕ = 2π*(0:1/Nq:(1-1/Nq))
+    Ω = k + Radii[1]*cos(ϕ) + 1im*Radii[2]*sin(ϕ)
+
+    if flag
+        RR = 2*R_min
+        ΩΩ = inputs["k₀"]-1im*inputs["γ⟂"] + (RR/2)*cos(ϕ) + 1im*(RR/2)*sin(ϕ)
+    end
+    
+    AA = @parallel (+) for i in 1:Nq
+
+        k′ = Ω[i]
+        k′² = k′^2
+
+        if (i > 1) & (i < Nq)
+            dk′ = (Ω[i+1]-Ω[i-1]  )/2
+        elseif i == Nq
+            dk′ = (Ω[1]  -Ω[end-1])/2
+        elseif i == 1
+            dk′ = (Ω[2]  -Ω[end]  )/2
+        end
+
+        χk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(k′)*F.*F_ext[r]*k′², N_ext, N_ext, +)
+
+        A  = (∇²+(ɛ+Γ)*k′²+χk′²)\M
+        A₀ = A*dk′/(2π*1im)
+        A₁ = A*k′*dk′/(2π*1im)
+
+        if flag
+            kk′ = ΩΩ[i]
+            kk′² = kk′^2
+            if (i > 1) & (i < Nq)
+                dkk′ = (ΩΩ[i+1]-ΩΩ[i-1]  )/2
+            elseif i == Nq
+                dkk′ = (ΩΩ[1]  -ΩΩ[end-1])/2
+            elseif i == 1
+                dkk′ = (ΩΩ[2]  -ΩΩ[end]  )/2
+            end
+            χkk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(kk′)*F.*F_ext[r]*kk′², N_ext, N_ext, +)
+            
+            AA  = (∇²+(ɛ+Γ)*kk′²+χkk′²)\M
+            AA₀ = AA*dkk′/(2π*1im)
+            AA₁ = AA*kk′*dkk′/(2π*1im)
+
+            A₀ = A₀-AA₀
+            A₁ = A₁-AA₁
+        end
+        
+        [A₀ A₁]
+        
+    end
+
+    A₀ = AA[:,1:nevals]
+    A₁ = AA[:,nevals + (1:nevals)]
+    
+    P = svdfact(A₀,thin = false)
+    temp = find(P[:S] .< rank_tol)
+    if isempty(temp)
+        println("error. need more nevals")
+        return
+    else
+        k = temp[1]-1
+    end
+
+    B = (P[:U][:,1:k])'*A₁*(P[:Vt][1:k,:])'*diagm(1./P[:S][1:k])
+
+    D,V = eig(B)
+
+    return D
+
+end 
+# end of function computePolesNL2_parallel
+
+
+function computeZerosNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=1., R_min = .01)
+    
+    inputs1 = deepcopy(inputs)
+    
+    inputs1["ɛ_ext"] = conj(inputs1["ɛ_ext"])
+    inputs1["Γ_ext"] = conj(inputs["Γ_ext"])
+    inputs1["γ⟂"] = -inputs["γ⟂"]
+    inputs1["D₀"] = -inputs["D₀"]
+    
+    k = computePolesNL2_parallel(inputs1, conj(k), Radii; Nq=Nq, nPoles=nZeros, F=F, R_min=R_min)
+    
+    return conj(k)
+    
+end
+# end of function computeZerosNL2_parallel
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 
