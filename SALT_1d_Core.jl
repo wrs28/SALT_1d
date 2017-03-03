@@ -160,7 +160,7 @@ end
 
 function processInputs()
 
-    (N, λ₀, λ, ∂, Γ, F, ɛ, xᵨ₊, xᵨ₋, γ⟂, D₀, a) = evalfile("SALT_1d_Inputs.jl")
+    (N, λ₀, λ, ∂, Γ, F, ɛ, γ⟂, D₀, a) = evalfile("SALT_1d_Inputs.jl")
 
     ω₀ = 2π./λ₀
     ω = 2π./λ

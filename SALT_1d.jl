@@ -5,10 +5,9 @@ export processInputs, updateInputs, computePolesL, computePolesNL1, computePoles
 include("SALT_1d_Core.jl")
 
 using .Core
+
 using NLsolve
 using Formatting
-
-#include("SALT_1d_Parallel.jl")
 
 ####################################################################################
 
@@ -212,7 +211,7 @@ end
 
 
 
-function computePolesNL2(inputs::Dict, k::Number, Radii; Nq=100, nPoles=3, F=1., R_min = .01)
+function computePolesNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=1., R_min = .01)
     # With Line Pulling, using contour integration
 
     nevals = nPoles
@@ -333,7 +332,7 @@ end
 
 
 
-function computeZerosNL2(inputs::Dict, k::Number, Radii; Nq=100, nZeros=3, F=1., R_min = .01)
+function computeZerosNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=1., R_min = .01)
     
     inputs1 = deepcopy(inputs)
     
@@ -351,7 +350,7 @@ end
 
 
 
-function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, F=1., dispOpt = false, truncate = false, fileName = [])
+function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, F=1., dispOpt = false, truncate = false, fileName = "")
 
     ## definitions block
     dx = inputs["dx"]
@@ -494,7 +493,7 @@ end
 
 
 
-function computeS(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, ψ_init = [], fileName = [])
+function computeS(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, ψ_init = [], fileName = "")
     # N is the number of steps to go from D0 = 0 to given D0
 
     if (inputs["xᵨ₊"] ≤ inputs["∂"][1]) | (inputs["xᵨ₋"] ≥ inputs["∂"][end])
