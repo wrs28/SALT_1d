@@ -6,14 +6,14 @@ using SALT_1d
 
 
 
-function computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, filename = "")
+function computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, fileName = "")
     # N is the number of steps to go from D0 = 0 to given D0 or a=0 to a, whichever is specified in N_Type
     # defaults to running S only on workers, not on head node. Use computeS_parallel! for a little more control
 
-    if isempty(filename)
+    if isempty(fileName)
         S = SharedArray(Complex128,(2,2,length(inputs["k"]),N), pids=workers())
     else
-        S = SharedArray(abspath(filename),Complex128,(2,2,length(inputs["k"]),N), pids=workers(), mode="w+")
+        S = SharedArray(abspath(fileName),Complex128,(2,2,length(inputs["k"]),N), pids=workers(), mode="w+")
     end
     
     for i in 1:length(S)
