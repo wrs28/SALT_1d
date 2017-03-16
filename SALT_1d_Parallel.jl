@@ -1,6 +1,6 @@
 module SALT_1d_Parallel
 
-export computeS_parallel, computeS_parallel!, computePolesNL2_parallel, computeZerosNL2_parallel
+export computeS_parallel, computeS_parallel!, S_wait, computePolesNL2_parallel, computeZerosNL2_parallel
 
 using SALT_1d
 using SALT_1d.Core
@@ -48,6 +48,7 @@ end # end of function computeS_parallel!
 
 
 
+
 function computeS_parallel_core!(S::SharedArray, inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt=true)
 
     idx = indexpids(S)
@@ -65,11 +66,25 @@ end # end of function computeS_parallel_core
 
 
 
-function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=1., R_min = .01)
+function S_wait(r::Channel)
+
+    c = 0
+    while c < r.sz_max
+        take!(r)
+        c += 1
+    end
+    
+    return
+    
+end
+
+
+
+
+function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
 
     nevals = nPoles
-    rank_tol = 2e-4
 
     ## definitions block
     dx = inputs["dx"]
@@ -179,7 +194,7 @@ end
 # end of function computePolesNL2_parallel
 
 
-function computeZerosNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=1., R_min = .01)
+function computeZerosNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
     
     inputs1 = deepcopy(inputs)
     
@@ -188,19 +203,12 @@ function computeZerosNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
     inputs1["γ⟂"] = -inputs["γ⟂"]
     inputs1["D₀"] = -inputs["D₀"]
     
-    k = computePolesNL2_parallel(inputs1, conj(k), Radii; Nq=Nq, nPoles=nZeros, F=F, R_min=R_min)
+    k = computePolesNL2_parallel(inputs1, conj(k), Radii; Nq=Nq, nPoles=nZeros, F=F, R_min=R_min, rank_tol = rank_tol)
     
     return conj(k)
     
 end
 # end of function computeZerosNL2_parallel
-
-
-
-
-
-
-
 
 
 

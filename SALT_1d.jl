@@ -211,11 +211,10 @@ end
 
 
 
-function computePolesNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=1., R_min = .01)
+function computePolesNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
 
     nevals = nPoles
-    rank_tol = 2e-4
 
     ## definitions block
     dx = inputs["dx"]
@@ -331,7 +330,7 @@ end
 
 
 
-function computeZerosNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=1., R_min = .01)
+function computeZerosNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 2e-4)
     
     inputs1 = deepcopy(inputs)
     
@@ -340,7 +339,7 @@ function computeZerosNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=10
     inputs1["γ⟂"] = -inputs["γ⟂"]
     inputs1["D₀"] = -inputs["D₀"]
     
-    k = computePolesNL2(inputs1, conj(k), Radii; Nq=Nq, nPoles=nZeros, F=F, R_min=R_min)
+    k = computePolesNL2(inputs1, conj(k), Radii; Nq=Nq, nPoles=nZeros, F=F, R_min=R_min, rank_tol = rank_tol)
     
     return conj(k)
     
