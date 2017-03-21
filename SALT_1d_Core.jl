@@ -37,16 +37,16 @@ function laplacian(ℓ::Float64,N::Int,Σ)
 end # end of function laplacian
 
 
-function σ(x,∂,λ)
+function σ(x,∂)
 
     r = whichRegion(x,∂)
     s = similar(r,Float64)
 
     for i in 1:length(r)
         if r[i] == 1
-            s[i] = (2/mean(λ))*abs2(x[i]-∂[2])/mean(λ)^2
+            s[i] = abs2(x[i]-∂[2])/abs2(∂[1]-∂[2])
         elseif r[i] == length(∂)-1
-            s[i] = (2/mean(λ))*abs2(x[i]-∂[end-1])/mean(λ)^2
+            s[i] = abs2(x[i]-∂[end-1])/abs2(∂[end]-∂[end-1])
         else
             s[i] = 0
         end
@@ -163,8 +163,8 @@ function processInputs()
     (N, λ₀, λ, ∂, Γ, F, ɛ, γ⟂, D₀, a) = evalfile("SALT_1d_Inputs.jl")
 
     ω₀ = 2π./λ₀
-    ω = 2π./λ
-    k = ω
+    ω  = 2π./λ
+    k  = ω
     k₀ = ω₀
     ℓ = ∂[end] - ∂[1]
 
@@ -232,7 +232,7 @@ end
 
 
 
-function updateInputs(inputs)
+function updateInputs(inputs::Dict)
 
     ∂ = inputs["∂"]
     N = inputs["N"]
@@ -332,7 +332,7 @@ function computeCFs_Core(inputs::Dict, k::Number, nTCFs::Int; F=1., η_init = []
 
     r = whichRegion(x_ext,∂_ext)
 
-    ∇² = laplacian(ℓ_ext, N_ext, 1+1im*σ(x_ext,∂_ext,λ)/k)
+    ∇² = laplacian(ℓ_ext, N_ext, 1+1im*σ(x_ext,∂_ext)/k)
 
     Γ = zeros(N_ext,1)
     for dd in 2:length(∂_ext)-1
