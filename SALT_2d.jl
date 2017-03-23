@@ -133,7 +133,7 @@ end
 
 
 
-    function solve_SPA(inputs, ω; z₀₊=0.001im, z₀₋=0.001im, F = 1., u=[], η=[], φ₊=[], φ₋=[])
+    function solve_SPA1(inputs, ω; z₀₊=0.001im, z₀₋=0.001im, F = 1., u=[], η=[], φ₊=[], φ₋=[])
 
         x = inputs["x_ext"][inputs["x_inds"]]
         y = inputs["u_ext"][inputs["u_inds"]]
