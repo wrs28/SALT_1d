@@ -108,7 +108,7 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
         Γ = Γ[:] + full(δ)/Γ_ext[dd]
     end
 
-    ∇² = laplacian(ℓ_ext, N_ext, 1+1im*σ(x_ext,∂_ext,λ)/k)
+    ∇² = laplacian(ℓ_ext, N_ext, 1+1im*σ(x_ext,∂_ext)/real(k))
     ɛ = sparse(1:N_ext, 1:N_ext, ɛ_ext[r], N_ext, N_ext, +)
     Γ = sparse(1:N_ext, 1:N_ext, Γ[:]    , N_ext, N_ext, +)
 
@@ -251,7 +251,7 @@ end
 #    
 #    r = whichRegion(x_ext, ∂_ext)
 #
-#    ∇² = laplacian(ℓ_ext, N_ext, 1+1im*σ(x_ext,∂_ext,λ)/k)
+#    ∇² = laplacian(ℓ_ext, N_ext, 1+1im*σ(x_ext,∂_ext)/real(k))
 #
 #    Γ = zeros(N_ext,1)
 #    for dd in 2:length(∂_ext)-1
