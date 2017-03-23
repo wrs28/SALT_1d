@@ -4,6 +4,12 @@ export laplacian, σ, whichRegion, trapz, dirac_δ, heaviside_Θ, processInputs,
 
 #############################################################
 
+PML_extinction = 1e3
+PML_ρ = 1/4
+PML_power_law = 2
+F_min = 1e-15
+dN1 = 10 # to do: remove this extra layer, it's no longer necessary
+
 function grad(N::Int,dx::Float64)
 
     I₁ = collect(1:N)
@@ -39,14 +45,17 @@ end # end of function laplacian
 
 function σ(x,∂)
 
+    dx = x[2]-x[1]
+    α = ( (PML_ρ/dx)^(PML_power_law+1) )/ ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law
+
     r = whichRegion(x,∂)
     s = similar(r,Float64)
 
     for i in 1:length(r)
         if r[i] == 1
-            s[i] = abs2(x[i]-∂[2])/abs2(∂[1]-∂[2])
+            s[i] = (1+0.1im)*α*abs(x[i]-∂[2])^PML_power_law
         elseif r[i] == length(∂)-1
-            s[i] = abs2(x[i]-∂[end-1])/abs2(∂[end]-∂[end-1])
+            s[i] = (1+0.1im)*α*abs(x[i]-∂[end-1])^PML_power_law
         else
             s[i] = 0
         end
@@ -175,8 +184,9 @@ function processInputs()
 
     dx = ℓ/(N-1);
     n = 1/dx
-    dN1 = ceil(Integer,2.5*λ₀*n)
-    dN2 = ceil(Integer,0.25*λ₀*n)
+#    dN1 = ceil(Integer,2.5*λ₀*n)
+#    dN2 = ceil(Integer,0.25*λ₀*n)
+    dN2 = (PML_power_law+1)*log(PML_extinction)/PML_ρ
     N_ext = N + 2(dN1+dN2)
     ℓ_ext = dx*(N_ext-1)
 
@@ -187,7 +197,6 @@ function processInputs()
 
     ∂_ext = [x_ext[1]-dx/2 x_ext[dN1+1] ∂ x_ext[dN1+dN2+N+dN2+1] x_ext[end]+dx/2]
 
-    F_min = 1e-15
     F[F .== zero(Float64)] = F_min
     F_ext = [F_min F_min F F_min F_min]
 
@@ -255,8 +264,9 @@ function updateInputs(inputs::Dict)
 
     dx = ℓ/(N-1);
     n = 1/dx
-    dN1 = ceil(Integer,2.5*λ₀*n)
-    dN2 = ceil(Integer,0.25*λ₀*n)
+#    dN1 = ceil(Integer,2.5*λ₀*n)
+#    dN2 = ceil(Integer,0.25*λ₀*n)
+    dN2 = (PML_power_law+1)*log(PML_extinction)/PML_ρ
     N_ext = N + 2(dN1+dN2)
     ℓ_ext = dx*(N_ext-1)
 
@@ -266,7 +276,6 @@ function updateInputs(inputs::Dict)
 
     ∂_ext = [x_ext[1]-dx/2 x_ext[dN1+1] ∂ x_ext[dN1+dN2+N+dN2+1] x_ext[end]+dx/2]
 
-    F_min = 1e-15
     F[F .== zero(Float64)] = F_min
     F_ext = [F_min F_min F F_min F_min]
 
