@@ -1,8 +1,30 @@
+N = [201,201]
+
+λ₀ = 2π./15
+λ  = 2π./linspace(14,16,10)
+
+origin = (0.,0.)
+∂ = [-0.5   0.5    -0.5    0.5] + [origin[1] origin[1] origin[2] origin[2]]
+
+F = [0.0   1.0]
+ɛ = [1.0   3.0].^2
+
+γ⊥ = 1.
+D₀ = 0.00
+
+a = 1
+
+extras = (π/3) #(θ) this is in general a tuplet
+
+#############################################
+
+R = .3 # radius of disk
+
 function geometry(x,y,∂)
 
     local region::Int
-    
-    if ( (x-.5)^2 + (y-.5)^2 < .3^2)
+        
+    if ( (x-origin[1])^2 + (y-origin[2])^2 < R^2)
         region = 2
 #    elseif (((x-.5)^2 + (y-.5)^2) < .4^2) & ((y-.5)<.3)
 #        region = 2
@@ -14,29 +36,9 @@ function geometry(x,y,∂)
 
 end
 
-
 #############################################
 
-N = 275*[1,1]
-
-λ₀ = 2π./15
-λ  = 2π./linspace(14,16,10)
-
-∂ = [-0.25   1.25    -0.25    1.25]
-
-F = [0.0   1.0]
-ɛ = [1.0   3.0].^2
-
-γ⊥ = 1.
-D₀ = 0.00
-
-a = 1
-
-extras = (π/3) #(θ)
-
-#############################################
-
-function incidentWave(inds,ω,inputs)
+function incidentWave(inds,k,inputs)
     
     x = inputs["x_ext"]
     y = inputs["u_ext"]
@@ -45,8 +47,8 @@ function incidentWave(inds,ω,inputs)
     x_inds,y_inds = ind2sub((Nₓ,Nᵤ),inds)
     θ = inputs["extras"][1]
     
-    kₓ = ω*cos(θ)
-    kᵤ = ω*sin(θ)
+    kₓ = k*cos(θ)
+    kᵤ = k*sin(θ)
 
     φ = zeros(Complex64,Nₓ*Nᵤ)
     for i in 1:length(inds)

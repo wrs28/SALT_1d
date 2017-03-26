@@ -88,7 +88,7 @@ function scrambleY(M::SparseMatrixCSC{Complex{Float64},Int},N::Int)
 end # end of function scrambleY
 
 
-function grad(N::Array{Int},dr::Array{Float64})
+function grad(N::Array{Int},dr::Array{Float64}; isScrambled=false)
 
     Nₓ = N[1]
     dx = dr[1]
@@ -97,10 +97,12 @@ function grad(N::Array{Int},dr::Array{Float64})
     du = dr[2]
 
     ∇ₓ = grad_1d(Nₓ-1,dx)
-    ∇ₓ = scrambleX(∇ₓ,Nᵤ)
-
     ∇ᵤ = grad_1d(Nᵤ-1,du)
-    ∇ᵤ = scrambleY(∇ᵤ,Nₓ)
+
+    if isScrambled
+        ∇ₓ = scrambleX(∇ₓ,Nᵤ)
+        ∇ᵤ = scrambleY(∇ᵤ,Nₓ)
+    end
 
     return ∇ₓ,∇ᵤ
 
@@ -125,30 +127,24 @@ function laplacian(k::Number,inputs::Dict)
 
     Σₓ,Σᵤ = σ((x,y),∂,geometry)
 
-    ∇ₓ,∇ᵤ = grad([Nₓ,Nᵤ],[dx, du])
+    ∇ₓ,∇ᵤ = grad([Nₓ,Nᵤ],[dx, du]; isScrambled=false)
 
     sₓ₁ = sparse(1:Nₓ-1,1:Nₓ-1,1./(1+.5im*(Σₓ[1:end-1] + Σₓ[2:end])/real(k)),Nₓ-1,Nₓ-1)
-    sₓ₁ = scrambleX(sₓ₁,Nᵤ)
-
     sₓ₂ = sparse(1:Nₓ,1:Nₓ,1./(1+1im*(Σₓ)/real(k)),Nₓ,Nₓ)
-    sₓ₂ = scrambleX(sₓ₂,Nᵤ)
 
     sᵤ₁ = sparse(1:Nᵤ-1,1:Nᵤ-1,1./(1+.5im*(Σᵤ[1:end-1] + Σᵤ[2:end])/real(k)),Nᵤ-1,Nᵤ-1)
-    sᵤ₁ = scrambleY(sᵤ₁,Nₓ)
-
     sᵤ₂ = sparse(1:Nᵤ,1:Nᵤ,1./(1+1im*(Σᵤ)/real(k)),Nᵤ,Nᵤ)
-    sᵤ₂ = scrambleY(sᵤ₂,Nₓ)
 
     ∇ₓ²= -(sₓ₂*∇ₓ.'*sₓ₁*∇ₓ)
+    ∇ₓ²[1,1]   += -2/dx^2
+    ∇ₓ²[Nₓ,Nₓ] += -2/dx^2
+    
     ∇ᵤ²= -(sᵤ₂*∇ᵤ.'*sᵤ₁*∇ᵤ)
-    ∇² = ∇ₓ² + ∇ᵤ²
+    ∇ᵤ²[1,1]   += -2/du^2
+    ∇ᵤ²[Nᵤ,Nᵤ] += -2/du^2
 
-    ∇²[1:Nᵤ:Nₓ*Nᵤ,1:Nᵤ:Nₓ*Nᵤ]  += -2/dx^2
-    ∇²[Nₓ:Nᵤ:Nₓ*Nᵤ,1:Nᵤ:Nₓ*Nᵤ] += -2/dx^2
-
-    ∇²[1:Nₓ:Nₓ*Nᵤ]  += -2/du^2
-    ∇²[Nᵤ:Nₓ:Nₓ*Nᵤ] += -2/du^2
-
+    ∇² = scrambleX(∇ₓ²,Nᵤ) + scrambleY(∇ᵤ²,Nₓ)
+    
     return ∇²
 
 end # end of function laplacian
