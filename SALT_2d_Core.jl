@@ -1,16 +1,18 @@
 module Core
 
 ### PARAMETER BLOCK ###
-PML_extinction = 1e2
+PML_extinction = 1e3
 PML_ρ = 1/3
 PML_power_law = 2
+α_imag = -.25
 F_min = 1e-15
-dNₓ2 = 5
-dNᵤ2 = 5
+dNₓ2 = 0
+dNᵤ2 = 0
+subPixelNum = 15
 #######################
 
 
-export laplacian, whichRegion, trapz, processInputs, updateInputs
+export laplacian, whichRegion, subpixelSmoothing, trapz, processInputs, updateInputs
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -125,7 +127,7 @@ function laplacian(k::Number,inputs::Dict)
     dx = inputs["dr"][1]
     du = inputs["dr"][2]
 
-    Σₓ,Σᵤ = σ((x,y),∂,geometry)
+    Σₓ,Σᵤ = σ(inputs)
 
     ∇ₓ,∇ᵤ = grad([Nₓ,Nᵤ],[dx, du]; isScrambled=false)
 
@@ -150,44 +152,34 @@ function laplacian(k::Number,inputs::Dict)
 end # end of function laplacian
 
 
-function σ(r,∂,geometry)
+function σ(inputs::Dict)
 
-    x = copy(r[1])
-    y = copy(r[2])
+    x = inputs["x_ext"]
+    y = inputs["u_ext"]
+    ∂ = inputs["∂_ext"]
 
     dx = x[2]-x[1]
     dy = y[2]-y[1]
 
-    αₓ = (1+.1im)*( (PML_ρ/dx)^(PML_power_law+1) )/ ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law
-    αᵤ = (1+.1im)*( (PML_ρ/dy)^(PML_power_law+1) )/ ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law
+    αₓ = (1+α_imag*1im)*( (PML_ρ/dx)^(PML_power_law+1) )/ ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law
+    αᵤ = (1+α_imag*1im)*( (PML_ρ/dy)^(PML_power_law+1) )/ ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law
 
-
-    r = whichRegion(r,∂,geometry)
-
-    sₓ = similar(x,Complex128)
-    sᵤ = similar(y,Complex128)
+    sₓ = zeros(Complex128,length(x))
+    sᵤ = zeros(Complex128,length(y))
 
     for i in 1:length(x)
-        if r[i,1] in (1,8,7)
+        if ∂[1] ≤ x[i] ≤ ∂[5]
             sₓ[i] = αₓ*abs(x[i]-∂[5])^PML_power_law
-        #extinction*(abs(x[i]-∂[5])/abs(∂[1]-∂[5])).^power
-        elseif r[i,1] in (3,4,5)
+        elseif ∂[6] ≤ x[i] ≤ ∂[2]
             sₓ[i] = αₓ*abs(x[i]-∂[6])^PML_power_law
-        #extinction*(abs(x[i]-∂[6])/abs(∂[2]-∂[6])).^power
-        else
-            sₓ[i] = 0
         end
     end
 
     for j in 1:length(y)
-        if r[1,j] in (1,2,3)
-            sᵤ[j] = αᵤ*abs(y[j]-∂[8])^PML_power_law
-        #extinction*(abs(y[j]-∂[8])/abs(∂[4]-∂[8])).^power
-        elseif r[1,j] in (7,6,5)
+        if ∂[3] ≤ y[j] ≤ ∂[7]
             sᵤ[j] = αᵤ*abs(y[j]-∂[7])^PML_power_law
-        #extinction*(abs(y[j]-∂[7])/abs(∂[3]-∂[7])).^power
-        else
-            sᵤ[j] = 0
+        elseif ∂[8] ≤ y[j] ≤ ∂[4]
+            sᵤ[j] = αᵤ*abs(y[j]-∂[8])^PML_power_law
         end
     end
 
@@ -201,47 +193,93 @@ function whichRegion(r,∂,geometry)
     x = r[1]
     y = r[2]
 
-    region = zeros(Int,length(x),length(y));
+    region = zeros(Int,length(x),length(y))
 
     for i in 1:length(x), j in 1:length(y)
 
-        if ∂[1] ≤ x[i] ≤ ∂[5]
-            if ∂[8] ≤ y[j] ≤ ∂[4]
-                region[i,j] = 1
-            elseif ∂[3] ≤ y[j] ≤ ∂[7]
-                region[i,j] = 7
-            elseif ∂[7] ≤ y[j] ≤ ∂[8]
-                region[i,j] = 8
-            end                
+        region[i,j] = 8 + geometry(x[i], y[j], ∂[5:end])
+        
+        if region[i,j] == 9
+            if ∂[1] ≤ x[i] ≤ ∂[5]
+                if ∂[8] ≤ y[j] ≤ ∂[4]
+                    region[i,j] = 1
+                elseif ∂[3] ≤ y[j] ≤ ∂[7]
+                    region[i,j] = 7
+                elseif ∂[7] ≤ y[j] ≤ ∂[8]
+                    region[i,j] = 8
+                end                
+            elseif ∂[5] ≤ x[i] ≤ ∂[6]
+                if ∂[8] ≤ y[j] ≤ ∂[4]
+                    region[i,j] = 2
+                elseif ∂[3] ≤ y[j] ≤ ∂[7]
+                    region[i,j] = 6
+                end                
+            elseif ∂[6] ≤ x[i] ≤ ∂[2]
+                if ∂[8] ≤ y[j] ≤ ∂[4]
+                    region[i,j] = 3
+                elseif ∂[3] ≤ y[j] ≤ ∂[7]
+                    region[i,j] = 5
+                elseif ∂[7] ≤ y[j] ≤ ∂[8]
+                    region[i,j] = 4
+                end                
+            end
         end
-
-        if ∂[5] ≤ x[i] ≤ ∂[6]
-            if ∂[8] ≤ y[j] ≤ ∂[4]
-                region[i,j] = 2
-            elseif ∂[3] ≤ y[j] ≤ ∂[7]
-                region[i,j] = 6
-            end                
-        end
-
-        if ∂[6] ≤ x[i] ≤ ∂[2]
-            if ∂[8] ≤ y[j] ≤ ∂[4]
-                region[i,j] = 3
-            elseif ∂[3] ≤ y[j] ≤ ∂[7]
-                region[i,j] = 5
-            elseif ∂[7] ≤ y[j] ≤ ∂[8]
-                region[i,j] = 4
-            end                
-        end
-
-        if  (∂[5] < x[i] < ∂[6]) & (∂[7] < y[j] < ∂[8])
-            region[i,j] = 8 + geometry(x[i], y[j], ∂[5:end])
-        end
-
+        
     end
 
     return region
 
 end # end of function whichRegion
+
+
+
+function subpixelSmoothing(inputs; ext = true, r = [])
+    # for now it's exclusively for ɛ, could feasibly be extended eventually...
+    
+    if ext
+        x = inputs["x_ext"]
+        y = inputs["u_ext"]
+        ɛ = inputs["ɛ_ext"]
+    else
+        x = inputs["x"]
+        y = inputs["u"]
+        ɛ = inputs["ɛ"]
+    end
+    ∂ = inputs["∂_ext"]
+    if isempty(r)
+        r = whichRegion( (x,y), ∂, inputs["geometry"]) 
+    end
+
+    ɛ_smoothed = deepcopy(ɛ[r])
+    
+    for i in 2:(length(x)-1), j in 2:(length(y)-1)
+        
+        nearestNeighborFlag = (ɛ[r[i,j]] !== ɛ[r[i,j+1]]) | (ɛ[r[i,j]] !== ɛ[r[i,j-1]]) | (ɛ[r[i,j]] !== ɛ[r[i+1,j]]) | (ɛ[r[i,j]] !== ɛ[r[i-1,j]])
+        
+        nextNearestNeighborFlag = (ɛ[r[i,j]] !== ɛ[r[i+1,j+1]]) | (ɛ[r[i,j]] !== ɛ[r[i-1,j-1]]) | (ɛ[r[i,j]] !== ɛ[r[i+1,j-1]]) | (ɛ[r[i,j]] !== ɛ[r[i-1,j+1]])
+        
+        if nearestNeighborFlag | nextNearestNeighborFlag
+            
+            x_min = (x[i]+x[i-1])/2
+            y_min = (y[j]+y[j-1])/2
+            
+            x_max = (x[i]+x[i+1])/2
+            y_max = (y[j]+y[j+1])/2
+            
+            X = linspace(x_min,x_max,subPixelNum)
+            Y = linspace(y_min,y_max,subPixelNum)
+            
+            subRegion = whichRegion((X,Y), ∂,inputs["geometry"])
+            ɛ_smoothed[i,j] = mean(ɛ[subRegion])
+            
+        end
+        
+    end
+    
+    return ɛ_smoothed
+    
+end # end of function subpixelSmoothing
+
 
 
 function trapz(z,dr)

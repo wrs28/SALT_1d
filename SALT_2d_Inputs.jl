@@ -1,13 +1,13 @@
-N = [201,201]
+N = 201*[1,1]
 
 λ₀ = 2π./15
 λ  = 2π./linspace(14,16,10)
 
 origin = (0.,0.)
-∂ = [-0.5   0.5    -0.5    0.5] + [origin[1] origin[1] origin[2] origin[2]]
+∂ = 0.5*[-1   1    -1    1] + [origin[1] origin[1] origin[2] origin[2]]
 
-F = [0.0   1.0]
-ɛ = [1.0   3.0].^2
+F = [0.0   1.0    1.0    1.0]
+ɛ = [1.0   3.0    3.0    3.0].^2
 
 γ⊥ = 1.
 D₀ = 0.00
@@ -26,8 +26,6 @@ function geometry(x,y,∂)
         
     if ( (x-origin[1])^2 + (y-origin[2])^2 < R^2)
         region = 2
-#    elseif (((x-.5)^2 + (y-.5)^2) < .4^2) & ((y-.5)<.3)
-#        region = 2
     else
         region = 1
     end

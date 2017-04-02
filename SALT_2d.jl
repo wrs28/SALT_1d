@@ -33,11 +33,13 @@ function computePolesL(inputs::Dict, k::Number, nPoles::Int; F=1., truncate = fa
     ## END OF DEFINITIONS BLOCK ##
 
     r = whichRegion((x_ext,y_ext),∂_ext,inputs["geometry"])
-
+    ɛ_ext = subpixelSmoothing(inputs; ext = true, r = r)
+    
     ∇² = laplacian(k,inputs)
         
-    ɛ⁻¹ = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, 1./(ɛ_ext[r[:]]-1im*D₀.*F.*F_ext[r[:]]), Nₓ*Nᵤ, Nₓ*Nᵤ, +)
-        
+#    ɛ⁻¹ = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, 1./(ɛ_ext[r[:]]-1im*D₀.*F.*F_ext[r[:]]), Nₓ*Nᵤ, Nₓ*Nᵤ, +)
+    ɛ⁻¹ = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, 1./(ɛ_ext[:]-1im*D₀.*F.*F_ext[r[:]]), Nₓ*Nᵤ, Nₓ*Nᵤ, +)    
+    
     (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛ⁻¹*∇²,which = :LM, nev = nPoles, sigma = k^2)
     
     
@@ -51,7 +53,7 @@ function computePolesL(inputs::Dict, k::Number, nPoles::Int; F=1., truncate = fa
         F_temp = F
     end
     for ii = 1:length(k²)
-        N = trapz((inputs["ɛ_ext"][r1]-1im*D₀.*F_temp.*inputs["F_ext"][r1]).*abs2(ψ_ext[inds,ii]),inputs["dr"])
+        N = trapz((ɛ_ext[inputs["xu_inds"]]-1im*D₀.*F_temp.*inputs["F_ext"][r1]).*abs2(ψ_ext[inds,ii]),inputs["dr"])
         ψ[:,ii] = ψ_ext[:,ii]/sqrt(N)
     end
    
