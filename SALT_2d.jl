@@ -1,6 +1,6 @@
 module SALT_2d
 
-export processInputs, updateInputs, computePolesL
+export processInputs, updateInputs, computeCFs, computePolesL, computeZerosL, computePolesNL1, computeZerosNL1, computePolesNL2, wavePlot
 #, updateInputs, computePolesL, computePolesNL1, computePolesNL2, computeZerosL, computeZerosNL1, computeZerosNL2, computeCFs, solve_SPA, solve_scattered, solve_single_mode_lasing, solve_CPA, computeS, bootstrap, CF_analysis, CF_synthesis, computeZerosL2
 
 include("SALT_2d_Core.jl")
@@ -9,6 +9,7 @@ using .Core
 
 using NLsolve
 using Formatting
+using PyPlot
 
 
 #######################################################################################################
@@ -16,6 +17,30 @@ using Formatting
 using .Core
 using NLsolve
 using Formatting
+
+
+
+function computeCFs(inputs::Dict, k::Number, nTCFs::Int; bc = "out", F=1., η_init = [], ψ_init = [])
+    # No Line Pulling, calculation independent of pump D
+
+    if bc in ["out","outgoing","o","radiating"]
+        η,u = computeCFs_Core(inputs, k, nTCFs; F=F, η_init = η_init, ψ_init = ψ_init)
+        return η,u
+        
+    elseif bc in ["in","incoming","inc","incident","i"]
+        inputs1 = deepcopy(inputs)
+        inputs1["ɛ_ext"] = conj(inputs1["ɛ_ext"])
+        η,ψ = computeCFs_Core(inputs1, conj(k), nTCFs; F=F, η_init = η_init, ψ_init = ψ_init)
+        β = conj(η)
+        v = conj(ψ)
+        return β,v
+        
+    else
+        println("Invalid boundary conditions. Either bc = ""i"" or bc = ""o"". ")
+        return
+    end
+end 
+# end of function computeCFs
 
 
 
@@ -27,21 +52,17 @@ function computePolesL(inputs::Dict, k::Number, nPoles::Int; F=1., truncate = fa
     y_ext = inputs["u_ext"]
     ∂_ext = inputs["∂_ext"]
     N_ext = inputs["N_ext"]; Nₓ = N_ext[1]; Nᵤ = N_ext[2]
-    ɛ_ext = inputs["ɛ_ext"]
     D₀ = inputs["D₀"]
-    F_ext = inputs["F_ext"]
     ## END OF DEFINITIONS BLOCK ##
 
-    r = whichRegion((x_ext,y_ext),∂_ext,inputs["geometry"])
-    ɛ_ext = subpixelSmoothing(inputs; ext = true, r = r)
+    r = whichRegion((x_ext,y_ext), inputs)
+    ɛ_ext, F_ext = subpixelSmoothing(inputs; truncate = false, r = r)
     
     ∇² = laplacian(k,inputs)
         
-#    ɛ⁻¹ = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, 1./(ɛ_ext[r[:]]-1im*D₀.*F.*F_ext[r[:]]), Nₓ*Nᵤ, Nₓ*Nᵤ, +)
-    ɛ⁻¹ = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, 1./(ɛ_ext[:]-1im*D₀.*F.*F_ext[r[:]]), Nₓ*Nᵤ, Nₓ*Nᵤ, +)    
+    ɛ⁻¹ = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, 1./(ɛ_ext[:]-1im*D₀.*F.*F_ext[:]), Nₓ*Nᵤ, Nₓ*Nᵤ, +)    
     
     (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛ⁻¹*∇²,which = :LM, nev = nPoles, sigma = k^2)
-    
     
     ψ = zeros(Complex128, Nₓ*Nᵤ, nPoles)
 
@@ -53,84 +74,263 @@ function computePolesL(inputs::Dict, k::Number, nPoles::Int; F=1., truncate = fa
         F_temp = F
     end
     for ii = 1:length(k²)
-        N = trapz((ɛ_ext[inputs["xu_inds"]]-1im*D₀.*F_temp.*inputs["F_ext"][r1]).*abs2(ψ_ext[inds,ii]),inputs["dr"])
+        N = trapz((ɛ_ext[inds]-1im*D₀.*F_temp.*F_ext[inds]).*abs2(ψ_ext[inds,ii]),inputs["dr"])
         ψ[:,ii] = ψ_ext[:,ii]/sqrt(N)
     end
    
     if truncate
-        return sqrt(k²),ψ[inputs["xu_inds"],:]
+        return sqrt(k²),ψ[inds,:]
     else
         return sqrt(k²),ψ
     end
     
-end
-
-
-
-    function computePolesNL(inputs, ω, Radii; Nq=100, nevals=3, F=1.) #With Line Pulling
-
-        rank_tol = 2e-4
     
-        dr = inputs["dr"]; dx = dr[1]; dy = dr[2]
-        x_ext = inputs["x_ext"]
-        y_ext = inputs["u_ext"]
-        ∂_ext = inputs["∂_ext"]
-        ℓ_ext = inputs["ℓ_ext"]
-        N_ext = inputs["N_ext"]; Nₓ = N_ext[1]; Nᵤ = N_ext[2]
-        F_ext = inputs["F_ext"]
-        D₀ = inputs["D₀"]
-        ɛ_ext = inputs["ɛ_ext"]
+end #end of function computePolesL
 
-        r = whichRegion((x_ext,y_ext),∂_ext,inputs["geometry"])
 
-        ∇² = laplacian(ω,inputs)
+
+
+function computeZerosL(inputs::Dict, k::Number, nZeros::Int; F=1., truncate = false)
+    # No Line Pulling. Set D or F to zero to get transparent cavity.
     
-        ɛ = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, ɛ_ext[r[:]], Nₓ*Nᵤ, Nₓ*Nᵤ, +)
+    inputs1 = deepcopy(inputs)
+    
+    inputs1["ɛ_ext"] = conj(inputs1["ɛ_ext"])
+    inputs1["γ⟂"] = -inputs["γ⟂"]
+    inputs1["D₀"] = -inputs["D₀"]
+    
+    kz,ψz = computePolesL(inputs1, conj(k), nZeros; F=F, truncate = truncate)
+    
+    return conj(kz),conj(ψz)
+
+end 
+# end of function computeZerosL
 
 
-        function γ(ω′)
-            return inputs["γ⊥"]/(ω′-inputs["ω₀"]+1im*inputs["γ⊥"])
-        end
+
+function computePolesNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .5, max_count = 15, max_iter = 50)
+    # With Line Pulling. Nonlinear solve using TCF evecs and evals
+    # max_count: the max number of TCF states to compute
+    # max_iter: maximum number of iterations to include in nonlinear solve
+    # η: should be a number, not an array (even a singleton array)
     
-        A  = zeros(Complex128,Nₓ*Nᵤ,nevals)
-        A₀ = zeros(Complex128,Nₓ*Nᵤ,nevals)
-        A₁ = zeros(Complex128,Nₓ*Nᵤ,nevals)
-        M = rand(Nₓ*Nᵤ,nevals)
-        Ω = ω + Radii[1]*cos(2π*(0:1/Nq:(1-1/Nq))) + 1im*Radii[2]*sin(2π*(0:1/Nq:(1-1/Nq)))
+    ## definitions block
+    γ⟂ = inputs["γ⟂"]
+    k₀ = inputs["k₀"]
+    D₀ = inputs["D₀"]
+    ##
     
-        for i in 1:Nq
-            ω′ = Ω[i]
-            ω′² = ω′^2
-            if i > 1
-                dω′ = Ω[i]-Ω[i-1]
-            else
-                dω′ = Ω[1]-Ω[end]
+    function γ(k)
+        γ⟂./(k-k₀+1im*γ⟂)
+    end
+    
+    u = NaN*ones(Complex128,prod(inputs["N_ext"]),1)
+    η_init = [η_init]
+    η_init[:,1],u[:,1] = computeCFs(inputs, k_init, 1, bc="out", η_init=η_init[1], ψ_init = u_init)
+
+    dr = inputs["dr"]
+    ɛ,F_ext = subpixelSmoothing(inputs; truncate = false)
+    
+    function f!(z, fvec)
+
+        k = z[1]+1im*z[2]
+    
+        flag = true
+        count = 1
+        M = 1
+        ind = Int
+        while flag
+
+            η_temp,u_temp = computeCFs(inputs, k, M; η_init=η_init[1], ψ_init = u[:,1], F=F)
+            overlap = zeros(Float64,M)
+            
+            for i in 1:M
+                overlap[i] = abs(trapz(u[:,1].*F_ext[:].*F.*u_temp[:,i],dr))
             end
+            
+            ind = findmax(overlap)[2]
+    
+            if (abs(overlap[ind]) > (1-tol))
+                flag = false
+                η_init[:,1] = η_temp[ind]
+                u[:,1] = u_temp[:,ind]
+            elseif  (count < max_count) & (abs(overlap[ind]) ≤ (1-tol))
+                M += 1
+            else
+                flag = false
+                η_init[:,1] = η_temp[ind]
+                u[:,1] = u_temp[:,ind]
+                println("Warning: overlap less than tolerance, skipped to neighboring TCF.")                
+            end
+            
+            count += 1
+                        
+        end
         
-            χω′² = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, D₀*γ(ω′)*F.*F_ext[r[:]]*ω′², Nₓ*Nᵤ, Nₓ*Nᵤ, +)
-
-            A = (∇²+ɛ*ω′²+χω′²)\M
-            A₀ += A*dω′/(2π*1im)
-            A₁ += A*ω′*dω′/(2π*1im)
-
-        end
-
-        P = svdfact(A₀,thin = true)
-        temp = find(P[:S] .< rank_tol)
-        if isempty(temp)
-            println("error. need more nevals")
-            return
-        else
-            k = temp[1]-1
-        end
-
-        B = (P[:U][:,1:k])'*A₁*(P[:Vt][1:k,:])'*diagm(1./P[:S][1:k])
-
-        D,V = eig(B)
-
-        return D
+        η = η_init[1]
+    
+        fvec[1] = real((η-D₀*γ(k))/prod(k-k_avoid))
+        fvec[2] = imag((η-D₀*γ(k))/prod(k-k_avoid))
 
     end
+
+    z = nlsolve(f!,[real(k_init),imag(k_init)]; iterations = max_iter, show_trace = dispOpt)
+    k = z.zero[1]+1im*z.zero[2]
+    conv = converged(z)
+    
+    η_init[1] = inputs["D₀"]*γ(k)
+    η,u[:,1] = computeCFs(inputs, k, 1; η_init=η_init[1], F=F)
+    
+    return k,u[:,1],η[1],conv
+
+end
+# end of function computePolesNL1
+
+
+
+
+function computeZerosNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, β_init = 1e-13+0.0im, v_init = [], k_avoid = [0.], tol = .5, max_count = 15, max_iter = 50)
+    # With Line Pulling. Nonlinear solve using TCF evecs and evals
+    
+    inputs1 = deepcopy(inputs)
+    
+    inputs1["ɛ_ext"] = conj(inputs1["ɛ_ext"])
+    inputs1["γ⟂"] = -inputs["γ⟂"]
+    inputs1["D₀"] = -inputs["D₀"]
+    
+    k,u,η,conv = computePolesNL1(inputs1, conj(k_init); F=F, dispOpt=dispOpt, η_init=conj(β_init), u_init=conj(v_init), k_avoid = conj(k_avoid), tol = .7, max_count = 15, max_iter = 50)
+    
+    return conj(k),conj(u),conj(η),conv
+    
+end
+# end of function computeZerosNL1
+
+
+
+
+
+function computePolesNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=1., R_min = .01, rank_tol = 1e-8)
+    # With Line Pulling, using contour integration
+
+    nevals = nPoles
+
+    ## definitions block
+    dr = inputs["dr"]
+    N_ext = prod(inputs["N_ext"])
+    D₀ = inputs["D₀"]
+    ##end of definitions block
+
+
+    ∇² = laplacian(k,inputs)
+    ɛ_ext, F_ext = subpixelSmoothing(inputs; truncate = false)
+
+    function γ(k′)
+        return inputs["γ⟂"]/(k′-inputs["k₀"]+1im*inputs["γ⟂"])
+    end
+
+    A  = zeros(Complex128,N_ext,nevals)
+    A₀ = zeros(Complex128,N_ext,nevals)
+    A₁ = zeros(Complex128,N_ext,nevals)
+
+    rad(a,b,θ) = b./sqrt(sin(θ).^2+(b/a)^2.*cos(θ).^2)
+    θ = angle(inputs["k₀"]-1im*inputs["γ⟂"]-k)
+    flag = abs(inputs["k₀"]-1im*inputs["γ⟂"]-k) < rad(Radii[1],Radii[2],θ)
+    
+    M = rand(N_ext,nevals)
+    ϕ = 2π*(0:1/Nq:(1-1/Nq))
+    Ω = k + Radii[1]*cos(ϕ) + 1im*Radii[2]*sin(ϕ)
+
+    if flag
+        AA  = zeros(Complex128,N_ext,nevals)
+        AA₀ = zeros(Complex128,N_ext,nevals)
+        AA₁ = zeros(Complex128,N_ext,nevals)
+        RR = 2*R_min
+        ΩΩ = inputs["k₀"]-1im*inputs["γ⟂"] + (RR/2)*cos(ϕ) + 1im*(RR/2)*sin(ϕ)
+    end
+    
+    for i in 1:Nq
+
+        println(i)
+        
+        k′ = Ω[i]
+        k′² = k′^2
+
+        if (i > 1) & (i < Nq)
+            dk′ = (Ω[i+1]-Ω[i-1]  )/2
+        elseif i == Nq
+            dk′ = (Ω[1]  -Ω[end-1])/2
+        elseif i == 1
+            dk′ = (Ω[2]  -Ω[end]  )/2
+        end
+
+        ɛk′² = sparse(1:N_ext, 1:N_ext, ɛ_ext[:]*k′², N_ext, N_ext, +)
+        χk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(k′)*F.*F_ext[:]*k′², N_ext, N_ext, +)
+
+        A = (∇²+ɛk′²+χk′²)\M
+        A₀ += A*dk′/(2π*1im)
+        A₁ += A*k′*dk′/(2π*1im)
+
+        if flag
+            kk′ = ΩΩ[i]
+            kk′² = kk′^2
+            if (i > 1) & (i < Nq)
+                dkk′ = (ΩΩ[i+1]-ΩΩ[i-1]  )/2
+            elseif i == Nq
+                dkk′ = (ΩΩ[1]  -ΩΩ[end-1])/2
+            elseif i == 1
+                dkk′ = (ΩΩ[2]  -ΩΩ[end]  )/2
+            end
+            ɛkk′² = sparse(1:N_ext, 1:N_ext, ɛ_ext[:]*kk′², N_ext, N_ext, +)
+            χkk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(kk′)*F.*F_ext[:]*kk′², N_ext, N_ext, +)
+            
+            AA = (∇²+ɛkk′²+χkk′²)\M
+            AA₀ += AA*dkk′/(2π*1im)
+            AA₁ += AA*kk′*dkk′/(2π*1im)
+
+       end
+        
+    end
+
+    if flag
+        A₀ = A₀-AA₀
+        A₁ = A₁-AA₁
+    end
+    
+    P = svdfact(A₀,thin = false)
+    temp = find(P[:S] .< rank_tol)
+    if isempty(temp)
+        println("error. need more nevals")
+        return
+    else
+        k = temp[1]-1
+    end
+
+    B = (P[:U][:,1:k])'*A₁*(P[:Vt][1:k,:])'*diagm(1./P[:S][1:k])
+
+    D,V = eig(B)
+
+    return D
+
+end 
+# end of function computePolesNL2
+
+
+
+
+function computeZerosNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
+    
+    inputs1 = deepcopy(inputs)
+    
+    inputs1["ɛ_ext"] = conj(inputs1["ɛ_ext"])
+    inputs1["γ⟂"] = -inputs["γ⟂"]
+    inputs1["D₀"] = -inputs["D₀"]
+    
+    k = computePolesNL2(inputs1, conj(k), Radii; Nq=Nq, nPoles=nZeros, F=F, R_min=R_min, rank_tol = rank_tol)
+    
+    return conj(k)
+    
+end
+# end of function computeZerosNL2
 
 
 
@@ -448,4 +648,118 @@ function solve_SPA(inputs,ω; z₀ = 0.0im)
 
 
 
-end
+function wavePlot(ψ, inputs::Dict; truncate = false, array = true, how = abs2)
+    # plot results of computePolesL wavefunctions
+
+    N = size(ψ,2)
+
+    if truncate
+        M = inputs["N"]
+        x = inputs["x"]
+        y = inputs["u"]
+        ∂ = inputs["∂"]
+    else
+        M = inputs["N_ext"]
+        x = inputs["x_ext"]
+        y = inputs["u_ext"]
+        ∂ = inputs["∂_ext"]
+    end
+    
+    ψ_plot = NaN*zeros(Complex128, N, M[1], M[2])
+
+    for i in 1:N
+        ψ_plot[i,:,:] = reshape(ψ[:,i], (M[1],M[2]) )
+    end
+    
+    
+    if array
+    
+        figure(figsize=4.8*[3,(N+1)*(∂[4]-∂[3])/(∂[2]-∂[1])])
+        subplots_adjust(hspace=0.0)
+        subplots_adjust(wspace=0.0)
+
+        subplot(N+1,3,1); axt = gca()
+        r = whichRegion( (x,y), inputs)
+        pcolormesh(x, y, r.')
+        xlim( [ ∂[1],∂[2] ] )
+        ylim( [ ∂[3],∂[4] ] )
+axis("tight")
+        xlabel("Region/Real")
+        setp(axt[:xaxis][:tick_top]())
+        setp(axt[:xaxis][:set_label_position]("top")) 
+
+        subplot(N+1,3,2); axt = gca()
+        ɛ, F = subpixelSmoothing(inputs; truncate=truncate, r=r)
+        pcolormesh(x,y,ɛ.')
+        xlim( [ ∂[1],∂[2] ] )
+        ylim( [ ∂[3],∂[4] ] )
+axis("tight")
+        xlabel("Index/Imag")
+        setp(axt[:get_xticklabels](),visible=false)
+        setp(axt[:get_yticklabels](),visible=false)
+        setp(axt[:xaxis][:tick_top]())
+        setp(axt[:xaxis][:set_label_position]("top")) 
+
+        subplot(N+1,3,3); axt = gca()
+        pcolormesh(x, y, F.')
+        xlim( [ ∂[1],∂[2] ] )
+        ylim( [ ∂[3],∂[4] ] )
+axis("tight")
+        xlabel("F/abs2")
+        setp(axt[:get_xticklabels](),visible=false)
+        setp(axt[:get_yticklabels](),visible=false)
+        setp(axt[:xaxis][:tick_top]())
+        setp(axt[:xaxis][:set_label_position]("top")) 
+
+        for i in 1:N
+
+            subplot(N+1,3,3+3*(i-1)+1); axt = gca()
+            pcolormesh(x,y,real(ψ_plot[i,:,:]).',cmap = "bwr")
+            xlim( [ ∂[1],∂[2] ] )
+            ylim( [ ∂[3],∂[4] ] )
+axis("tight")
+            clim([-1,1])
+            setp(axt[:get_xticklabels](),visible=false)
+            setp(axt[:get_yticklabels](),visible=false)
+
+            subplot(N+1,3,3+3*(i-1)+2); axt = gca()
+            pcolormesh(x,y,imag(ψ_plot[i,:,:]).',cmap = "bwr")
+            xlim( [ ∂[1],∂[2] ] )
+            ylim( [ ∂[3],∂[4] ] )
+axis("tight")
+            clim([-1,1])
+            setp(axt[:get_xticklabels](),visible=false)
+            setp(axt[:get_yticklabels](),visible=false)
+
+            subplot(N+1,3,3+3*(i-1)+3); axt = gca()
+            pcolormesh(x,y,abs2(ψ_plot[i,:,:]).',cmap = "gray_r")
+            xlim( [ ∂[1],∂[2] ] )
+            ylim( [ ∂[3],∂[4] ] )
+axis("tight")
+            clim([0,1])
+            setp(axt[:get_xticklabels](),visible=false)
+            setp(axt[:get_yticklabels](),visible=false)
+
+        end
+        
+    else
+       
+        for i in 1:N
+            figure(i, figsize=8*[1,(∂[4]-∂[3])/(∂[2]-∂[1])])
+            if how==abs2
+                cmap = "gray_r"
+            else
+                cmap = "bwr"
+            end
+            pcolormesh(x,y,how(ψ_plot[i,:,:]).',cmap=cmap)
+            xlim( [ ∂[1],∂[2] ] )
+            ylim( [ ∂[3],∂[4] ] )
+            axis("equal")
+        end
+        
+    end
+    
+end # end of function wavePlot
+
+#~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+end #end of module SALT

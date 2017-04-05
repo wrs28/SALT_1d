@@ -1,15 +1,15 @@
-N = 201*[1,1]
+N = 251*[1,1]
 
-λ₀ = 2π./15
+λ₀ = 2π./14.8
 λ  = 2π./linspace(14,16,10)
 
 origin = (0.,0.)
 ∂ = 0.5*[-1   1    -1    1] + [origin[1] origin[1] origin[2] origin[2]]
 
-F = [0.0   1.0    1.0    1.0]
-ɛ = [1.0   3.0    3.0    3.0].^2
+F = [0.0   0.0    1.0]
+ɛ = [1.0   3.0    3.0].^2
 
-γ⊥ = 1.
+γ⟂ = 1.
 D₀ = 0.00
 
 a = 1
@@ -18,13 +18,16 @@ extras = (π/3) #(θ) this is in general a tuplet
 
 #############################################
 
-R = .3 # radius of disk
+R1 = .3 # radius of disk
+R2 = .25 # radius of disk
 
 function geometry(x,y,∂)
 
     local region::Int
         
-    if ( (x-origin[1])^2 + (y-origin[2])^2 < R^2)
+    if ( (x-origin[1])^2 + (y-origin[2])^2 < R2^2)
+        region = 3
+    elseif ( (x-origin[1])^2 + (y-origin[2])^2 < R1^2)
         region = 2
     else
         region = 1
@@ -59,4 +62,4 @@ end
 
 ###########################################
 
-return (N, λ₀, λ, ∂, F, ɛ, γ⊥, D₀, a, geometry, incidentWave, extras)
+return (N, λ₀, λ, ∂, F, ɛ, γ⟂, D₀, a, geometry, incidentWave, extras)

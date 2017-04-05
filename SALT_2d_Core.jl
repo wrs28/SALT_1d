@@ -6,13 +6,11 @@ PML_ρ = 1/3
 PML_power_law = 2
 α_imag = -.25
 F_min = 1e-15
-dNₓ2 = 0
-dNᵤ2 = 0
-subPixelNum = 15
+subPixelNum = 10
 #######################
 
 
-export laplacian, whichRegion, subpixelSmoothing, trapz, processInputs, updateInputs
+export laplacian, whichRegion, subpixelSmoothing, trapz, processInputs, updateInputs, computeCFs_Core
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 
@@ -188,11 +186,13 @@ function σ(inputs::Dict)
 end # end of function σ
 
 
-function whichRegion(r,∂,geometry)
+function whichRegion(xy,inputs::Dict)
 
-    x = r[1]
-    y = r[2]
-
+    x = xy[1]
+    y = xy[2]
+    geometry = inputs["geometry"]
+    ∂ = inputs["∂_ext"]
+    
     region = zeros(Int,length(x),length(y))
 
     for i in 1:length(x), j in 1:length(y)
@@ -233,30 +233,31 @@ end # end of function whichRegion
 
 
 
-function subpixelSmoothing(inputs; ext = true, r = [])
+function subpixelSmoothing(inputs; truncate = false, r = [])
     # for now it's exclusively for ɛ, could feasibly be extended eventually...
     
-    if ext
-        x = inputs["x_ext"]
-        y = inputs["u_ext"]
-        ɛ = inputs["ɛ_ext"]
-    else
+    if truncate
         x = inputs["x"]
         y = inputs["u"]
-        ɛ = inputs["ɛ"]
+    else
+        x = inputs["x_ext"]
+        y = inputs["u_ext"]
     end
-    ∂ = inputs["∂_ext"]
+    
     if isempty(r)
-        r = whichRegion( (x,y), ∂, inputs["geometry"]) 
+        r = whichRegion( (x,y), inputs) 
     end
 
+    ɛ = inputs["ɛ_ext"]
+    F = inputs["F_ext"]
     ɛ_smoothed = deepcopy(ɛ[r])
+    F_smoothed = deepcopy(F[r])
     
     for i in 2:(length(x)-1), j in 2:(length(y)-1)
         
-        nearestNeighborFlag = (ɛ[r[i,j]] !== ɛ[r[i,j+1]]) | (ɛ[r[i,j]] !== ɛ[r[i,j-1]]) | (ɛ[r[i,j]] !== ɛ[r[i+1,j]]) | (ɛ[r[i,j]] !== ɛ[r[i-1,j]])
+        nearestNeighborFlag = (r[i,j]!==r[i,j+1]) | (r[i,j]!==r[i,j-1]) | (r[i,j]!==r[i+1,j]) | (r[i,j]!==r[i-1,j])
         
-        nextNearestNeighborFlag = (ɛ[r[i,j]] !== ɛ[r[i+1,j+1]]) | (ɛ[r[i,j]] !== ɛ[r[i-1,j-1]]) | (ɛ[r[i,j]] !== ɛ[r[i+1,j-1]]) | (ɛ[r[i,j]] !== ɛ[r[i-1,j+1]])
+        nextNearestNeighborFlag = (r[i,j]!==r[i+1,j+1]) | (r[i,j]!==r[i-1,j-1]) | (r[i,j]!==r[i+1,j-1]) | (r[i,j]!==r[i-1,j+1])
         
         if nearestNeighborFlag | nextNearestNeighborFlag
             
@@ -269,14 +270,15 @@ function subpixelSmoothing(inputs; ext = true, r = [])
             X = linspace(x_min,x_max,subPixelNum)
             Y = linspace(y_min,y_max,subPixelNum)
             
-            subRegion = whichRegion((X,Y), ∂,inputs["geometry"])
+            subRegion = whichRegion((X,Y), inputs)
             ɛ_smoothed[i,j] = mean(ɛ[subRegion])
+            F_smoothed[i,j] = mean(F[subRegion])
             
         end
         
     end
     
-    return ɛ_smoothed
+    return ɛ_smoothed, F_smoothed
     
 end # end of function subpixelSmoothing
 
@@ -297,7 +299,7 @@ end # end of function trapz
 function processInputs()
 
    
-    (N, λ₀, λ, ∂, F, ɛ, γ⊥, D₀, a, geometry, incidentWave, extras) = evalfile("SALT_2d_Inputs.jl")
+    (N, λ₀, λ, ∂, F, ɛ, γ⟂, D₀, a, geometry, incidentWave, extras) = evalfile("SALT_2d_Inputs.jl")
 
     ω₀ = 2π./λ₀
     ω  = 2π./λ
@@ -321,31 +323,25 @@ function processInputs()
     nᵤ = 1/du
 
     dNₓ1 = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
-#    dNₓ1 = ceil(Integer,1.0*λ₀*nₓ)
-#    dNₓ2 = ceil(Integer,0.05*λ₀*nₓ)
-
     dNᵤ1 = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
-#    dNᵤ1 = ceil(Integer,1.0*λ₀*nᵤ)
-#    dNᵤ2 = ceil(Integer,0.05*λ₀*nᵤ)
 
     dN1 = [dNₓ1 dNᵤ1]
-    dN2 = [dNₓ2 dNᵤ2]
 
-    Nₓ_ext = Nₓ + 2(dNₓ1+dNₓ2)
+    Nₓ_ext = Nₓ + 2(dNₓ1)
     ℓₓ_ext = dx*(Nₓ_ext-1)
 
-    Nᵤ_ext = Nᵤ + 2(dNᵤ1+dNᵤ2)
+    Nᵤ_ext = Nᵤ + 2(dNᵤ1)
     ℓᵤ_ext = du*(Nᵤ_ext-1)
 
     N_ext = [Nₓ_ext Nᵤ_ext]
     ℓ_ext = [ℓₓ_ext ℓᵤ_ext]
 
-    x_ext = vcat(-[(dNₓ1+dNₓ2):-1:1;]*dx+∂[1],  linspace(∂[1],∂[2],Nₓ), [1:(dNₓ1+dNₓ2);]*dx+∂[2])
-    x_inds = dNₓ1+dNₓ2+collect(1:Nₓ)
+    x_ext = vcat(-[dNₓ1:-1:1;]*dx+∂[1],  linspace(∂[1],∂[2],Nₓ), [1:dNₓ1;]*dx+∂[2])
+    x_inds = dNₓ1+collect(1:Nₓ)
     x = x_ext[x_inds]
 
-    u_ext = vcat(-[(dNᵤ1+dNᵤ2):-1:1;]*du+∂[3],  linspace(∂[3],∂[4],Nᵤ), [1:(dNᵤ1+dNᵤ2);]*du+∂[4])
-    u_inds = dNᵤ1+dNᵤ2+collect(1:Nᵤ)
+    u_ext = vcat(-[dNᵤ1:-1:1;]*du+∂[3],  linspace(∂[3],∂[4],Nᵤ), [1:dNᵤ1;]*du+∂[4])
+    u_inds = dNᵤ1+collect(1:Nᵤ)
     u = u_ext[u_inds]
     
     xu_inds = ( x_inds*ones(Int,size(u_inds')) + (ones(Int,size(x_inds))*(u_inds-1)')*Nₓ_ext )[:]
@@ -383,14 +379,13 @@ function processInputs()
         "ɛ_ext" => ɛ_ext,
         "F_ext" => F_ext,
         "x" => x,
-        "γ⊥" => γ⊥,
+        "γ⟂" => γ⟂,
         "D₀" => D₀,
         "a" => a,
         "geometry" => geometry,
         "incidentWave" => incidentWave,
         "extras" => extras,
-        "dN1" => dN1,
-        "dN2" => dN2)
+        "dN1" => dN1)
 
     return inputs
 
@@ -431,30 +426,24 @@ function updateInputs(inputs::Dict)
     nᵤ = 1/du
 
     dNₓ1 = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
-#    dNₓ1 = ceil(Integer,1.0*λ₀*nₓ)
-#    dNₓ2 = ceil(Integer,0.05*λ₀*nₓ)
-
     dNᵤ1 = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
-#    dNᵤ1 = ceil(Integer,1.0*λ₀*nᵤ)
-#    dNᵤ2 = ceil(Integer,0.05*λ₀*nᵤ)
 
     dN1 = [dNₓ1 dNᵤ1]
-    dN2 = [dNₓ2 dNᵤ2]
 
-    Nₓ_ext = Nₓ + 2(dNₓ1+dNₓ2)
+    Nₓ_ext = Nₓ + 2(dNₓ1)
     ℓₓ_ext = dx*(Nₓ_ext-1)
 
-    Nᵤ_ext = Nᵤ + 2(dNᵤ1+dNᵤ2)
+    Nᵤ_ext = Nᵤ + 2(dNᵤ1)
     ℓᵤ_ext = du*(Nᵤ_ext-1)
 
     N_ext = [Nₓ_ext Nᵤ_ext]
     ℓ_ext = [ℓₓ_ext ℓᵤ_ext]
 
-    x_ext = vcat(-[(dNₓ1+dNₓ2):-1:1;]*dx+∂[1],  linspace(∂[1],∂[2],Nₓ), [1:(dNₓ1+dNₓ2);]*dx+∂[2])
-    x_inds = dNₓ1+dNₓ2+collect(1:Nₓ)
+    x_ext = vcat(-[dNₓ1:-1:1;]*dx+∂[1],  linspace(∂[1],∂[2],Nₓ), [1:dNₓ1;]*dx+∂[2])
+    x_inds = dNₓ1+collect(1:Nₓ)
     x = x_ext[x_inds]
 
-    u_ext = vcat(-[(dNᵤ1+dNᵤ2):-1:1;]*du+∂[3],  linspace(∂[3],∂[4],Nᵤ), [1:(dNᵤ1+dNᵤ2);]*du+∂[4])
+    u_ext = vcat(-[dNᵤ1:-1:1;]*du+∂[3],  linspace(∂[3],∂[4],Nᵤ), [1:dNᵤ1;]*du+∂[4])
     u_inds = dNᵤ1+dNᵤ2+collect(1:Nᵤ)
     u = u_ext[u_inds]
     
@@ -466,8 +455,7 @@ function updateInputs(inputs::Dict)
     F_ext = [F_min F_min F_min F_min F_min F_min F_min F_min F]
 
     ɛ_ext = [1 1 1 1 1 1 1 1 ɛ]
-   
-    
+       
     inputsNew = Dict{Any,Any}(
         "λ" => λ,
         "λ₀" => λ₀,
@@ -494,19 +482,60 @@ function updateInputs(inputs::Dict)
         "ɛ_ext" => ɛ_ext,
         "F_ext" => F_ext,
         "x" => x,
-        "γ⊥" => inputs["γ⊥"],
+        "γ⟂" => inputs["γ⟂"],
         "D₀" => inputs["D₀"],
         "a" => inputs["a"],
         "geometry" => inputs["geometry"],
         "incidentWave" => inputs["incidentWave"],
         "extras" => inputs["extras"],
-        "dN1" => dN1,
-        "dN2" => dN2)
+        "dN1" => dN1)
 
     return inputsNew
-    
-    
+        
 end # end of function updateInputs
+
+
+
+function computeCFs_Core(inputs::Dict, k::Number, nTCFs::Int; F=1., η_init = [], ψ_init = [])
+# No Line Pulling, calculation independent of pump D
+
+    ## definitions block
+    x_ext = inputs["x_ext"]
+    y_ext = inputs["u_ext"]
+    ∂_ext = inputs["∂_ext"]
+    dr = inputs["dr"]
+    N_ext = inputs["N_ext"]; Nₓ = N_ext[1]; Nᵤ = N_ext[2]
+    D₀ = inputs["D₀"]
+    F_ext = inputs["F_ext"]
+    ##
+    
+    k²= k^2
+
+    ɛ_ext, F_ext = subpixelSmoothing(inputs; truncate = false)    
+
+    ∇² = laplacian(k, inputs)
+
+    ɛk² = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, ɛ_ext[:]*k², Nₓ*Nᵤ, Nₓ*Nᵤ, +)
+    sF  = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, sign(F.*F_ext[:]), Nₓ*Nᵤ, Nₓ*Nᵤ, +)
+    FF  = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, abs(F.*F_ext[:]), Nₓ*Nᵤ, Nₓ*Nᵤ, +)
+
+    if isempty(η_init) & isempty(ψ_init)
+        (η,ψ,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²)/k²,FF, which = :LM, nev = nTCFs, sigma = 1e-8)
+    elseif !isempty(η_init) & isempty(ψ_init)
+        (η,ψ,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²)/k²,FF, which = :LM, nev = nTCFs, sigma = η_init)
+    elseif !isempty(η_init) & !isempty(ψ_init)
+        (η,ψ,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²)/k²,FF, which = :LM, nev = nTCFs, sigma = η_init, v0 = ψ_init)
+    end
+
+    for ii = 1:length(η)
+        N = trapz( ψ[:,ii].*F.*F_ext[:].*ψ[:,ii], dr )
+        ψ[:,ii] = ψ[:,ii]/sqrt(N)
+    end
+
+    return η,ψ
+
+end
+#end of function computeCFs_Core
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~#
 

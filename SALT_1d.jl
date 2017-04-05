@@ -112,7 +112,7 @@ end
 
 
 
-function computePolesNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .7, max_count = 15, max_iter = 50)
+function computePolesNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .5, max_count = 15, max_iter = 50)
     # With Line Pulling. Nonlinear solve using TCF evecs and evals
     # max_count: the max number of TCF states to compute
     # max_iter: maximum number of iterations to include in nonlinear solve
@@ -130,11 +130,11 @@ function computePolesNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η
     
     u = NaN*ones(Complex128,inputs["N_ext"],1)
     η_init = [η_init]
-    η_init[:,1],u[:,1] = computeCFs(inputs, k_init, 1, bc="out", η_init=η_init[1], ψ_init = u_init)
+    η_init[:,1],u[:,1] = computeCFs(inputs, k_init, 1; bc="out", η_init=η_init[1], ψ_init = u_init, F=F)
 
     dx = inputs["dx"]
     r = whichRegion(inputs["x_ext"],inputs["∂_ext"])
-    F = inputs["F_ext"][r]
+    F_ext = inputs["F_ext"][r]
     
     function f!(z, fvec)
 
@@ -146,20 +146,20 @@ function computePolesNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η
         ind = Int
         while flag
             
-            η_temp,u_temp = computeCFs(inputs, k, M; η_init=η_init[1], ψ_init = u[:,1])
+            η_temp,u_temp = computeCFs(inputs, k, M; η_init=η_init[1], ψ_init = u[:,1], F=F)
             overlap = zeros(Float64,M)
             
             for i in 1:M
-                overlap[i] = abs(trapz(u[:,1].*F.*u_temp[:,i],dx))
+                overlap[i] = abs(trapz(u[:,1].*F_ext[:].*F.*u_temp[:,i],dx))
             end
             
             ind = findmax(overlap)[2]
     
-            if (abs(overlap[ind]-1) < (1-tol))
+            if (abs(overlap[ind]) > (1-tol))
                 flag = false
                 η_init[:,1] = η_temp[ind]
                 u[:,1] = u_temp[:,ind]
-            elseif  (count < max_count) & (abs(overlap[ind]-1) ≥ (1-tol))
+            elseif  (count < max_count) & (abs(overlap[ind]) ≤ (1-tol))
                 M += 1
             else
                 flag = false
@@ -184,7 +184,7 @@ function computePolesNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η
     conv = converged(z)
     
     η_init[1] = inputs["D₀"]*γ(k)
-    η,u[:,1] = computeCFs(inputs, k, 1; η_init=η_init[1])
+    η,u[:,1] = computeCFs(inputs, k, 1; η_init=η_init[1], F=F)
     
     return k,u[:,1],η[1],conv
 
@@ -192,7 +192,7 @@ end
 # end of function computePolesNL1
 
 
-function computeZerosNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, β_init = 1e-13+0.0im, v_init = [], k_avoid = [0.], tol = .7, max_count = 15, max_iter = 50)
+function computeZerosNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, β_init = 1e-13+0.0im, v_init = [], k_avoid = [0.], tol = .5, max_count = 15, max_iter = 50)
     # With Line Pulling. Nonlinear solve using TCF evecs and evals
     
     inputs1 = deepcopy(inputs)
