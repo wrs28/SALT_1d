@@ -126,7 +126,7 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
             dk′ = (Ω[2]  -Ω[end]  )/2
         end
 
-        ɛk′² = sparse(1:N_ext, 1:N_ext, ɛ_ext[:]*k′², N_ext, N_ext, +)
+        ɛk′² = sparse(1:N_ext, 1:N_ext, ɛ_ext[:]*k′²            , N_ext, N_ext, +)
         χk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(k′)*F.*F_ext[:]*k′², N_ext, N_ext, +)
 
         A  = (∇²+ɛk′²+χk′²)\M
