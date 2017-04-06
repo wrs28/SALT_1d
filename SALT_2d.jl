@@ -1,6 +1,6 @@
 module SALT_2d
 
-export processInputs, updateInputs, computeCFs, computePolesL, computeZerosL, computePolesNL1, computeZerosNL1, computePolesNL2
+export processInputs, updateInputs, computeCFs, computePolesL, computeZerosL, computePolesNL1, computeZerosNL1, computePolesNL2, computeZerosNL2
 #, updateInputs, computePolesL, computePolesNL1, computePolesNL2, computeZerosL, computeZerosNL1, computeZerosNL2, computeCFs, solve_SPA, solve_scattered, solve_single_mode_lasing, solve_CPA, computeS, bootstrap, CF_analysis, CF_synthesis, computeZerosL2
 
 include("SALT_2d_Core.jl")
