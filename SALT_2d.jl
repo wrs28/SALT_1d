@@ -250,8 +250,6 @@ function computePolesNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=10
     
     for i in 1:Nq
 
-        println(i)
-        
         k′ = Ω[i]
         k′² = k′^2
 
@@ -300,7 +298,7 @@ function computePolesNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=10
     temp = find(P[:S] .< rank_tol)
     if isempty(temp)
         println("error. need more nevals")
-        return
+        return NaN
     else
         k = temp[1]-1
     end
