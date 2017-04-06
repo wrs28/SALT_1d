@@ -175,7 +175,7 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
     A₀ = AA[:,1:nevals]
     A₁ = AA[:,nevals + (1:nevals)]
     
-    P = svdfact(A₀,thin = false)
+    P = svdfact(A₀,thin = true)
     temp = find(P[:S] .< rank_tol)
     if isempty(temp)
         println("error. need more nevals")

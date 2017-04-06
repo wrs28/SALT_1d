@@ -87,17 +87,18 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
     nevals = nPoles
 
     ## definitions block
-    dr = inputs["dr"]
-    N_ext = prod(inputs["N_ext"])
-    D₀ = inputs["D₀"]
+        dr = inputs["dr"]
+        N_ext = prod(inputs["N_ext"])
+        D₀ = inputs["D₀"]
+        k₀ = inputs["k₀"]
+        γ⟂ = inputs["γ⟂"]
     ##end of definitions block
-
 
     ∇² = laplacian(k,inputs)
     ɛ_ext, F_ext = subpixelSmoothing(inputs; truncate = false)
-
+    
     function γ(k′)
-        return inputs["γ⟂"]/(k′-inputs["k₀"]+1im*inputs["γ⟂"])
+        return γ⟂/(k′-k₀+1.0im*γ⟂)
     end
 
     rad(a,b,θ) = b./sqrt(sin(θ).^2+(b/a)^2.*cos(θ).^2)
@@ -112,9 +113,9 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
         RR = 2*R_min
         ΩΩ = inputs["k₀"]-1im*inputs["γ⟂"] + (RR/2)*cos(ϕ) + 1im*(RR/2)*sin(ϕ)
     end
-    
-    AA = @parallel (+) for i in 1:Nq
 
+    AA = @parallel (+) for i in 1:Nq
+        
         k′ = Ω[i]
         k′² = k′^2
 
@@ -125,10 +126,11 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
         elseif i == 1
             dk′ = (Ω[2]  -Ω[end]  )/2
         end
-
+        
         ɛk′² = sparse(1:N_ext, 1:N_ext, ɛ_ext[:]*k′²            , N_ext, N_ext, +)
         χk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(k′)*F.*F_ext[:]*k′², N_ext, N_ext, +)
 
+        A  = (∇²+ɛk′²+χk′²)\M
         A  = (∇²+ɛk′²+χk′²)\M
         A₀ = A*dk′/(2π*1im)
         A₁ = A*k′*dk′/(2π*1im)
@@ -143,8 +145,8 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
             elseif i == 1
                 dkk′ = (ΩΩ[2]  -ΩΩ[end]  )/2
             end
-            ɛkk′² = sparse(1:N_ext, 1:N_ext, ɛ_ext[:]*kk′², N_ext, N_ext, +)
-            χkk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(kk′)*F.*F_ext[:]*kk′², N_ext, N_ext, +)
+            ɛkk′² = sparse(1:N_ext, 1:N_ext, ɛ_ext*kk′², N_ext, N_ext, +)
+            χkk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(kk′)*F.*F_ext*kk′², N_ext, N_ext, +)
             
             AA  = (∇²+ɛkk′²+χkk′²)\M
             AA₀ = AA*dkk′/(2π*1im)
@@ -155,7 +157,7 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
         end
         
         [A₀ A₁]
-        
+
     end
 
     A₀ = AA[:,1:nevals]
@@ -418,4 +420,4 @@ end
 #
 #end
 
-end # end of Module SALT_1D.Parallel
+end # end of Module SALT_2D.Parallel
