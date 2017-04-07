@@ -1,12 +1,14 @@
 module Core
 
 ### PARAMETER BLOCK ###
+
 PML_extinction = 1e3
 PML_ρ = 1/3
 PML_power_law = 2
 α_imag = -.25
 F_min = 1e-15
-subPixelNum = 10
+subPixelNum = 15
+
 #######################
 
 
@@ -115,6 +117,7 @@ function laplacian(k::Number,inputs::Dict)
     geometry = inputs["geometry"]
     x = inputs["x_ext"]
     y = inputs["u_ext"]
+    bc = inputs["bc"]
 
     ℓₓ = inputs["ℓ_ext"][1]
     ℓᵤ = inputs["ℓ_ext"][2]
@@ -135,14 +138,35 @@ function laplacian(k::Number,inputs::Dict)
     sᵤ₁ = sparse(1:Nᵤ-1,1:Nᵤ-1,1./(1+.5im*(Σᵤ[1:end-1] + Σᵤ[2:end])/real(k)),Nᵤ-1,Nᵤ-1)
     sᵤ₂ = sparse(1:Nᵤ,1:Nᵤ,1./(1+1im*(Σᵤ)/real(k)),Nᵤ,Nᵤ)
 
-    ∇ₓ²= -(sₓ₂*∇ₓ.'*sₓ₁*∇ₓ)
-    ∇ₓ²[1,1]   += -2/dx^2
-    ∇ₓ²[Nₓ,Nₓ] += -2/dx^2
+    ∇ₓ² = -(sₓ₂*∇ₓ.'*sₓ₁*∇ₓ)
+    ∇ᵤ² = -(sᵤ₂*∇ᵤ.'*sᵤ₁*∇ᵤ)
+    ind = [1 Nₓ 1 Nᵤ 1]
+    for i in 1:4
+        if i < 3
+            if bc[i] in ["o" "open" "r" "radiating" "sommerfeld" "Sommerfeld" "s"]
+                ∇ₓ²[ind[i],ind[i]]   += -2/dx^2
+            elseif bc[i] in ["d" "dirichlet" "Dirichlet" "hard"]
+                ∇ₓ²[ind[i],ind[i]]   += -2/dx^2
+            elseif bc[i] in ["n" "neumann"   "Neumann"   "soft"]
+                ∇ₓ²[ind[i],ind[i]]   += 0
+            elseif bc[i] in ["p" "periodic"]
+                ∇ₓ²[ind[i],ind[i]]   += -1/dx^2
+                ∇ₓ²[ind[i],ind[i+1]] += +1/dx^2
+            end
+        else
+            if bc[i] in ["o" "open" "r" "radiating" "sommerfeld" "Sommerfeld" "s"]
+                ∇ᵤ²[ind[i],ind[i]]   += -2/du^2
+            elseif bc[i] in ["d" "dirichlet" "Dirichlet" "hard"]
+                ∇ᵤ²[ind[i],ind[i]]   += -2/du^2
+            elseif bc[i] in ["n" "neumann"   "Neumann"   "soft"]
+                ∇ᵤ²[ind[i],ind[i]]   += 0
+            elseif bc[i] in ["p" "periodic"]
+                ∇ᵤ²[ind[i],ind[i]]   += -1/du^2
+                ∇ᵤ²[ind[i],ind[i+1]] += +1/du^2
+            end
+        end
+    end
     
-    ∇ᵤ²= -(sᵤ₂*∇ᵤ.'*sᵤ₁*∇ᵤ)
-    ∇ᵤ²[1,1]   += -2/du^2
-    ∇ᵤ²[Nᵤ,Nᵤ] += -2/du^2
-
     ∇² = scrambleX(∇ₓ²,Nᵤ) + scrambleY(∇ᵤ²,Nₓ)
     
     return ∇²
@@ -156,8 +180,8 @@ function σ(inputs::Dict)
     y = inputs["u_ext"]
     ∂ = inputs["∂_ext"]
 
-    dx = x[2]-x[1]
-    dy = y[2]-y[1]
+    dx = inputs["dr"][1]
+    dy = inputs["dr"][2]
 
     αₓ = (1+α_imag*1im)*( (PML_ρ/dx)^(PML_power_law+1) )/ ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law
     αᵤ = (1+α_imag*1im)*( (PML_ρ/dy)^(PML_power_law+1) )/ ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law
@@ -295,11 +319,11 @@ function trapz(z,dr)
 
 end # end of function trapz
 
-#end
+
 function processInputs()
 
    
-    (N, λ₀, λ, ∂, F, ɛ, γ⟂, D₀, a, geometry, incidentWave, extras) = evalfile("SALT_2d_Inputs.jl")
+    (N, λ₀, λ, ∂, bc, F, ɛ, γ⟂, D₀, a, geometry, incidentWave, extras) = evalfile("SALT_2d_Inputs.jl")
 
     ω₀ = 2π./λ₀
     ω  = 2π./λ
@@ -319,29 +343,34 @@ function processInputs()
     du = ℓᵤ/(Nᵤ-1)
     dr = [dx, du]
 
-    nₓ = 1/dx
-    nᵤ = 1/du
-
-    dNₓ1 = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
-    dNᵤ1 = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
-
-    dN1 = [dNₓ1 dNᵤ1]
-
-    Nₓ_ext = Nₓ + 2(dNₓ1)
+    dN = [0 0 0 0]
+    for i in 1:4
+        if bc[i] in ["o" "open" "r" "radiating" "sommerfeld" "Sommerfeld" "s"]
+            dN[i] = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
+        elseif bc in ["d" "dirichlet" "Dirichlet" "hard"]
+            dN[i] = 0
+        elseif bc in ["n" "neumann"   "Neumann"   "soft"]
+            dN[i] = 0
+        elseif bc in ["p" "periodic"]
+            dN[i] = 0
+        end
+    end
+    
+    Nₓ_ext = Nₓ + dN[1] + dN[2]
     ℓₓ_ext = dx*(Nₓ_ext-1)
 
-    Nᵤ_ext = Nᵤ + 2(dNᵤ1)
+    Nᵤ_ext = Nᵤ + dN[3] + dN[4]
     ℓᵤ_ext = du*(Nᵤ_ext-1)
 
     N_ext = [Nₓ_ext Nᵤ_ext]
     ℓ_ext = [ℓₓ_ext ℓᵤ_ext]
 
-    x_ext = vcat(-[dNₓ1:-1:1;]*dx+∂[1],  linspace(∂[1],∂[2],Nₓ), [1:dNₓ1;]*dx+∂[2])
-    x_inds = dNₓ1+collect(1:Nₓ)
+    x_ext = ∂[1] + dx*(-dN[1]:(Nₓ-1+dN[2]))
+    x_inds = dN[1] + collect(1:Nₓ)
     x = x_ext[x_inds]
 
-    u_ext = vcat(-[dNᵤ1:-1:1;]*du+∂[3],  linspace(∂[3],∂[4],Nᵤ), [1:dNᵤ1;]*du+∂[4])
-    u_inds = dNᵤ1+collect(1:Nᵤ)
+    u_ext = ∂[3] + du*(-dN[3]:(Nᵤ-1+dN[4]))
+    u_inds = dN[3] + collect(1:Nᵤ)
     u = u_ext[u_inds]
     
     xu_inds = ( x_inds*ones(Int,size(u_inds')) + (ones(Int,size(x_inds))*(u_inds-1)')*Nₓ_ext )[:]
@@ -371,6 +400,7 @@ function processInputs()
         "u" => u,
         "xu_inds" => xu_inds,
         "∂" => ∂,
+        "bc" => bc,
         "ɛ" => ɛ,
         "F" => F,
         "N_ext" => N_ext,
@@ -385,7 +415,7 @@ function processInputs()
         "geometry" => geometry,
         "incidentWave" => incidentWave,
         "extras" => extras,
-        "dN1" => dN1)
+        "dN" => dN)
 
     return inputs
 
@@ -401,6 +431,7 @@ function updateInputs(inputs::Dict)
     λ = inputs["λ"]
     F = inputs["F"]
     ɛ = inputs["ɛ"]
+    bc = inputs["bc"]
 
     ######################
     
@@ -422,29 +453,34 @@ function updateInputs(inputs::Dict)
     du = ℓᵤ/(Nᵤ-1)
     dr = [dx, du]
 
-    nₓ = 1/dx
-    nᵤ = 1/du
-
-    dNₓ1 = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
-    dNᵤ1 = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
-
-    dN1 = [dNₓ1 dNᵤ1]
-
-    Nₓ_ext = Nₓ + 2(dNₓ1)
+    dN = [0 0 0 0]
+    for i in 1:4
+        if bc[i] in ["o" "open" "r" "radiating" "sommerfeld" "Sommerfeld" "s"]
+            dN[i] = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
+        elseif bc in ["d" "dirichlet" "Dirichlet" "hard"]
+            dN[i] = 0
+        elseif bc in ["n" "neumann"   "Neumann"   "soft"]
+            dN[i] = 0
+        elseif bc in ["p" "periodic"]
+            dN[i] = 0
+        end
+    end
+    
+    Nₓ_ext = Nₓ + dN[1] + dN[2]
     ℓₓ_ext = dx*(Nₓ_ext-1)
 
-    Nᵤ_ext = Nᵤ + 2(dNᵤ1)
+    Nᵤ_ext = Nᵤ + dN[3] + dN[4]
     ℓᵤ_ext = du*(Nᵤ_ext-1)
 
     N_ext = [Nₓ_ext Nᵤ_ext]
     ℓ_ext = [ℓₓ_ext ℓᵤ_ext]
 
-    x_ext = vcat(-[dNₓ1:-1:1;]*dx+∂[1],  linspace(∂[1],∂[2],Nₓ), [1:dNₓ1;]*dx+∂[2])
-    x_inds = dNₓ1+collect(1:Nₓ)
+    x_ext = ∂[1] + dx*(-dN[1]:(Nₓ-1+dN[2]))
+    x_inds = dN[1] + collect(1:Nₓ)
     x = x_ext[x_inds]
 
-    u_ext = vcat(-[dNᵤ1:-1:1;]*du+∂[3],  linspace(∂[3],∂[4],Nᵤ), [1:dNᵤ1;]*du+∂[4])
-    u_inds = dNᵤ1+dNᵤ2+collect(1:Nᵤ)
+    u_ext = ∂[3] + du*(-dN[3]:(Nᵤ-1+dN[4]))
+    u_inds = dN[3] + collect(1:Nᵤ)
     u = u_ext[u_inds]
     
     xu_inds = ( x_inds*ones(Int,size(u_inds')) + (ones(Int,size(x_inds))*(u_inds-1)')*Nₓ_ext )[:]
@@ -474,6 +510,8 @@ function updateInputs(inputs::Dict)
         "u" => u,
         "xu_inds" => xu_inds,
         "∂" => ∂,
+        "bc" => bc,
+        "ɛ" => ɛ,
         "ɛ" => ɛ,
         "F" => F,
         "N_ext" => N_ext,
@@ -488,7 +526,7 @@ function updateInputs(inputs::Dict)
         "geometry" => inputs["geometry"],
         "incidentWave" => inputs["incidentWave"],
         "extras" => inputs["extras"],
-        "dN1" => dN1)
+        "dN" => dN)
 
     return inputsNew
         

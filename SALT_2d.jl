@@ -61,7 +61,6 @@ function computePolesL(inputs::Dict, k::Number, nPoles::Int; F=1., truncate = fa
     ∇² = laplacian(k,inputs)
         
     ɛ⁻¹ = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, 1./(ɛ_ext[:]-1im*D₀.*F.*F_ext[:]), Nₓ*Nᵤ, Nₓ*Nᵤ, +)    
-    
     (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛ⁻¹*∇²,which = :LM, nev = nPoles, sigma = k^2)
     
     ψ = zeros(Complex128, Nₓ*Nᵤ, nPoles)

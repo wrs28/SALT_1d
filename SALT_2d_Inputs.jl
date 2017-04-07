@@ -3,8 +3,9 @@ N = 201*[1,1]
 λ₀ = 2π./14.8
 λ  = 2π./linspace(14,16,10)
 
-origin = (0.,0.)
-∂ = 0.5*[-1   1    -1    1] + [origin[1] origin[1] origin[2] origin[2]]
+origin = [0.,0.]
+∂ = 0.5*[-1    1    -1    1] + [origin[1] origin[1] origin[2] origin[2]]
+bc =    ["p"  "p"   "n"  "o"]
 
 F = [0.0   0.0    1.0]
 ɛ = [1.0   3.0    3.0].^2
@@ -62,4 +63,4 @@ end
 
 ###########################################
 
-return (N, λ₀, λ, ∂, F, ɛ, γ⟂, D₀, a, geometry, incidentWave, extras)
+return (N, λ₀, λ, ∂, bc, F, ɛ, γ⟂, D₀, a, geometry, incidentWave, extras)
