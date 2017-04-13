@@ -348,7 +348,7 @@ end
 
 
 
-function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, F=1., dispOpt = false, truncate = false, fileName = "")
+function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, F=1., dispOpt = false, truncate = false, fileName = "", ftol=1e-6, iter=150)
 
     ## definitions block
     dx = inputs["dx"]
@@ -458,7 +458,7 @@ function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, 
         Ψ_init[N_ext+(1:N_ext)] = imag(ψ_ext)
 
         df = DifferentiableSparseMultivariateFunction(f!, jac!)
-        z = nlsolve(df,Ψ_init, show_trace = dispOpt ,ftol = 1e-6, iterations = 150)
+        z = nlsolve(df,Ψ_init, show_trace = dispOpt , ftol=ftol, iterations=iter)
 
         if converged(z)
             ψ_ext = z.zero[1:N_ext] + 1im*z.zero[N_ext+(1:N_ext)]
@@ -694,14 +694,6 @@ end
 
 
 
-
-
-
-
-
-
-
-
 function solve_single_mode_lasing(inputs::Dict, D₀::Float64; ψ_init=0.000001, ω_init=inputs["ω₀"], inds=14,dispOpt=false)
 
     dx = inputs["dx"]
@@ -891,68 +883,7 @@ end
 # end of function solve_lasing
 
 
-function solve_CPA(inputs::Dict, D₀::Float64; ψ_init=0.000001, ω_init=inputs["ω₀"], inds=14,dispOpt = false)
-   
-    inputs1 = deepcopy(inputs)
-
-    inputs1["ɛ_ext"] = conj(inputs1["ɛ_ext"])
-    inputs1["Γ_ext"] = conj(inputs["Γ_ext"])
-    inputs1["γ⟂"] = -inputs["γ⟂"]
-    inputs1["D₀"] = -inputs["D₀"]
-    
-    ψ_ext,ω = solve_single_mode_lasing(inputs1, -D₀; ψ_init=conj(ψ_init), ω_init=ω_init, inds=inds, dispOpt = dispOpt)
-    
-    return conj(ψ_ext),conj(ω)
-    
-end
-
-
-
-
-function CF_analysis(ψ,inputs,ω,nCF)
-    
-    η1,u1 = computeCFs(inputs,ω,2*nCF)
-    perm = sortperm(η1, by = abs)
-    η = η1[perm]
-    u = u1[:,perm]
-    a = NaN*zeros(Complex128,nCF)
-    b = deepcopy(a)
-    
-    r = SALT_1d.Core.whichRegion(inputs["x_ext"],inputs["∂_ext"])
-    F = inputs["F_ext"][r]
-    
-    for i in 1:nCF
-        a[i] = SALT_1d.Core.trapz(F.*ψ.*u[:,i],inputs["dx"]) 
-        b[i] = SALT_1d.Core.trapz(F.*ψ.*conj(u[:,i]),inputs["dx"]) 
-    end
-    
-    return a,b
-    
-end 
-# end of function CF_analysis
-
-
-function CF_synthesis(a,inputs,ω)
-    
-    nCF = length(a)
-    
-    η1,u1 = computeCFs(inputs,ω,2*nCF)
-    perm = sortperm(η1, by = abs)
-    η = η1[perm]
-    u = u1[:,perm]
-    
-    ψ = zeros(Complex128,inputs["N_ext"])
-    
-    for i in 1:nCF
-        ψ += a[i].*u[:,i]
-    end
-    
-    return ψ
-    
-end 
-# end of function CF_synthesis
-
 ############################################################################################
 
 end 
-# end of Module SALT_1D
+# end of Module SALT_1d

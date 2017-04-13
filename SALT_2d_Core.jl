@@ -320,10 +320,10 @@ function trapz(z,dr)
 end # end of function trapz
 
 
-function processInputs()
+function processInputs(fileName = "./SALT_2d_Inputs.jl")
 
    
-    (N, λ₀, λ, ∂, bc, F, ɛ, γ⟂, D₀, a, geometry, incidentWave, extras) = evalfile("SALT_2d_Inputs.jl")
+    (N, λ₀, λ, ∂, bc, F, ɛ, γ⟂, D₀, a, geometry, incidentWave, extras) = evalfile(fileName)
 
     ω₀ = 2π./λ₀
     ω  = 2π./λ
@@ -345,7 +345,7 @@ function processInputs()
 
     dN = [0 0 0 0]
     for i in 1:4
-        if bc[i] in ["o" "open" "r" "radiating" "sommerfeld" "Sommerfeld" "s"]
+        if bc[i] in ["o" "open"]
             dN[i] = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
         elseif bc in ["d" "dirichlet" "Dirichlet" "hard"]
             dN[i] = 0
@@ -455,7 +455,7 @@ function updateInputs(inputs::Dict)
 
     dN = [0 0 0 0]
     for i in 1:4
-        if bc[i] in ["o" "open" "r" "radiating" "sommerfeld" "Sommerfeld" "s"]
+        if bc[i] in ["o" "open"]
             dN[i] = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
         elseif bc in ["d" "dirichlet" "Dirichlet" "hard"]
             dN[i] = 0

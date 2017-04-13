@@ -331,6 +331,128 @@ end
 
 
 
+function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, dispOpt = false, ψ_init=0, F=1., truncate=false, fileName="", ftol=2e-8, iter=750)
+
+    ## DEFINITIONS BLOCK ##
+        x_ext = inputs["x_ext"]
+        y_ext = inputs["u_ext"]
+        ∂_ext = inputs["∂_ext"]
+        N_ext = inputs["N_ext"]; Nₓ = N_ext[1]; Nᵤ = N_ext[2]
+        D₀ = inputs["D₀"]
+        γ⊥ = inputs["γ⊥"]
+        k₀ = inputs["k₀"]
+        incidentWave = inputs["incidentWave"]
+    ## END OF DEFINITIONS BLOCK ##
+
+    k²= k^2
+    dx²=dx^2
+    dy²=dy^2
+
+    function γ()
+        return γ⊥/(k-k₀+1im*γ⊥)
+    end
+    
+    r = whichRegion((x_ext,y_ext), inputs)
+    ɛ_ext, F_ext = subpixelSmoothing(inputs; truncate = false, r = r)
+    
+    ∇² = laplacian(k,inputs)
+
+    ɛk² = sparse(1:N_ext, 1:N_ext, ɛ_ext[:]*k², N_ext, N_ext, +)
+    χk² = sparse(1:N_ext, 1:N_ext, D₀*γ()*F.*F_ext[:]*k², N_ext, N_ext, +)
+    K²  = sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,fill(K²,Nₓ*Nᵤ),Nₓ*Nᵤ,Nₓ*Nᵤ,+)
+
+    φ = incidentWave(find(r.>9),k,inputs)
+    j = (∇²+K²)*φ
+
+    if ψ_init == 0 || !isNonLinear
+        ψ_ext = (∇²+ɛk²+χk²)\j
+    else
+        ψ_ext = ψ_init
+    end
+
+    if isNonLinear
+        Ψ_init = Array(Float64,2*length(j))
+        Ψ_init[1:length(j)]     = real(ψ_ext)
+        Ψ_init[length(j)+1:2*length(j)] = imag(ψ_ext)
+
+        function χ(Ψ)
+            V = inputs["F_ext"][r[:]].*γ()*inputs["D₀"]./(1+abs2(Ψ))
+            return sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,V,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
+        end
+
+        function χʳʳ′(Ψ)
+            V = -2.*inputs["F_ext"][r[:]].*real(γ().*Ψ).*inputs["D₀"].*real(Ψ)./((1+abs2(Ψ)).^2)
+            return sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,V,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
+        end
+
+        function χⁱʳ′(Ψ)
+            V = -2.*inputs["F_ext"][r[:]].*imag(γ().*Ψ).*inputs["D₀"].*real(Ψ)./((1+abs2(Ψ)).^2)
+            return sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,V,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
+        end
+
+        function χʳⁱ′(Ψ)
+            V = -2.*inputs["F_ext"][r[:]].*real(γ().*Ψ).*inputs["D₀"].*imag(Ψ)./((1+abs2(Ψ)).^2)
+            return sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,V,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
+        end
+
+        function χⁱⁱ′(Ψ)
+            V = -2.*inputs["F_ext"][r[:]].*imag(γ().*Ψ).*inputs["D₀"].*imag(Ψ)./((1+abs2(Ψ)).^2)
+            return sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,V,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
+        end
+
+        function f!(Ψ,fvec)
+            ψ = similar(j,Complex128)
+            ψ = Ψ[1:length(j)]+1im*Ψ[length(j)+1:2*length(j)]
+            temp = (∇²+ɛk²+χ(ψ)*k²)*ψ - j
+            fvec[1:length(j)]     = real(temp)
+            fvec[length(j)+1:2*length(j)] = imag(temp)
+        end
+
+        function jac!(Ψ,jacarr)
+            ψ = similar(j,Complex128)
+            ψ = Ψ[1:length(j)]+1im*Ψ[length(j)+1:2*length(j)]
+            temp = ∇²+ɛk²+χ(ψ)*k²
+            tempr = similar(temp,Float64)
+            tempi = similar(temp,Float64)
+            tr = nonzeros(tempr)
+            ti = nonzeros(tempi)
+            tr[:] = real((nonzeros(temp)))
+            ti[:] = imag((nonzeros(temp)))
+            tempj = [tempr+χʳʳ′(ψ) -tempi+χʳⁱ′(ψ); tempi+χⁱʳ′(ψ) tempr+χⁱⁱ′(ψ)]
+            jacarr[:,:] = tempj[:,:]
+        end
+
+        df = DifferentiableSparseMultivariateFunction(f!, jac!)
+        z = nlsolve(df, Ψ_init, show_trace = dispOpt , ftol = ftol, iterations = iter)
+
+        if converged(z)
+            ψ_ext = z.zero[1:length(j)] + im*z.zero[length(j)+1:2*length(j)]
+        else
+            ψ_ext = NaN*ψ_ext
+            println("Warning, solve_scattered did not converge. Returning NaN")
+        end
+
+    end
+
+    if !isempty(fileName)
+        if truncate
+            foo(fid) = serialize(fid, (inputs,ψ_ext[inputs["xu_inds"]],φ[inputs["xu_inds"]]) )
+            open(foo,fileName,"w")
+        else
+            foo1(fid) = serialize(fid, (inputs,ψ_ext,φ) )
+            open(foo1,fileName,"w")
+        end
+    end
+    
+    if truncate
+        return ψ_ext[inputs["xu_inds"]],φ[inputs["xu_inds"]]
+    else
+        return ψ_ext,φ
+    end
+
+end # end of function solve_scattered
+
+
 
     function solve_SPA1(inputs, ω; z₀₊=0.001im, z₀₋=0.001im, F = 1., u=[], η=[], φ₊=[], φ₋=[])
 
@@ -384,165 +506,6 @@ end
         ψ = inputs["a"]*φ+z*u
 
         return ψ
-
-    end
-
-
-
-    function computeCFS(inputs,ω,nTCFs;F=1)
-
-        dr = inputs["dr"]
-        dx = dr[1];dy = dr[2]
-        x_ext = inputs["x_ext"]
-        y_ext = inputs["u_ext"]
-        ∂_ext = inputs["∂_ext"]
-        ℓ_ext = inputs["ℓ_ext"]
-        N_ext = inputs["N_ext"]
-        Nₓ=inputs["N"][1]; Nᵤ = inputs["N"][2]
-        λ = inputs["λ"]
-        x_inds = inputs["x_inds"]
-        y_inds = inputs["u_inds"]
-        F_ext = inputs["F_ext"]
-        D₀ = inputs["D₀"]
-        a = inputs["a"]
-        ɛ_ext = inputs["ɛ_ext"]
-
-        ω²= ω^2
-        dx²=dx^2
-        dy²=dy^2
-
-        r = whichRegion((x_ext,y_ext),∂_ext,inputs["geometry"])
-
-        ∇² = laplacian(ω,inputs)
-
-        ɛω² = sparse(1:prod(N_ext),1:prod(N_ext),ɛ_ext[r[:]]*ω²   ,prod(N_ext),prod(N_ext),+)
-        Fω² = sparse(1:prod(N_ext),1:prod(N_ext),F.*F_ext[r[:]]*ω²,prod(N_ext),prod(N_ext),+)
-
-        (η,ψ_ext,nconv,niter,nmult,resid) = eigs(-(∇²+ɛω²),Fω², which = :LM, nev = nTCFs, sigma = 1e-12)
-    
-        ψ = zeros(Complex128,Nₓ*Nᵤ,nTCFs)
-        
-#        X_inds = [i for i in inputs["x_inds"], j in inputs["u_inds"]]
-#        Y_inds = [j for i in inputs["x_inds"], j in inputs["u_inds"]]
-    
-        for ii = 1:length(η)
-            N = trapz(ψ_ext[:,ii].*F_ext[r[:]].*ψ_ext[:,ii],dr)
-            ψ_ext[:,ii] = ψ_ext[:,ii]/sqrt(N)
-#            ψ[:,ii] = ψ_ext[Y_inds[:]*N_ext[1] + X_inds[:],ii]
-            ψ[:,ii] = ψ_ext[:,ii]
-        end
-                
-        return η,ψ
-
-    end
-
- 
-    function solve_scattered(inputs,ω; isNonLinear = false, ψ_init = 0)
-
-        dr = inputs["dr"]
-        dx = dr[1]; dy = dr[2]
-        x_ext = inputs["x_ext"]
-        y_ext = inputs["u_ext"]
-        ∂_ext = inputs["∂_ext"]
-        ℓ_ext = inputs["ℓ_ext"]
-        N_ext = inputs["N_ext"]; Nₓ = N_ext[1]; Nᵤ = N_ext[2]
-        λ = inputs["λ"]
-        x_inds = inputs["x_inds"]
-        y_inds = inputs["u_inds"]
-        F_ext = inputs["F_ext"]
-        D₀ = inputs["D₀"]
-        a = inputs["a"]
-        ɛ_ext = inputs["ɛ_ext"]
-    
-        function γ()
-            return inputs["γ⊥"]/(ω-inputs["ω₀"]+1im*inputs["γ⊥"])
-        end
-
-        ω²= ω^2
-        dx²=dx^2
-        dy²=dy^2
-
-        r = whichRegion((x_ext,y_ext),∂_ext,inputs["geometry"])
-
-        ∇² = laplacian(ω,inputs)
-
-        ɛω² = sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,ɛ_ext[r[:]]*ω²        ,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
-        χω² = sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,F_ext[r[:]]*ω².*γ()*D₀,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
-        Ω²  = sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,fill(ω²,Nₓ*Nᵤ),Nₓ*Nᵤ,Nₓ*Nᵤ,+)
-
-        φ = inputs["incidentWave"](find(r.>9),ω,inputs)
-        j = (∇²+Ω²)*φ
-
-        if ψ_init == 0 || !isNonLinear
-            ψ_ext = (∇²+ɛω²+χω²)\j
-        else
-            ψ_ext = ψ_init
-        end
-
-        if isNonLinear
-            Ψ_init = Array(Float64,2*length(j))
-            Ψ_init[1:length(j)]     = real(ψ_ext)
-            Ψ_init[length(j)+1:2*length(j)] = imag(ψ_ext)
-
-            function χ(Ψ)
-                V = inputs["F_ext"][r[:]].*γ()*inputs["D₀"]./(1+abs2(Ψ))
-                return sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,V,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
-            end
-
-            function χʳʳ′(Ψ)
-                V = -2.*inputs["F_ext"][r[:]].*real(γ().*Ψ).*inputs["D₀"].*real(Ψ)./((1+abs2(Ψ)).^2)
-                return sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,V,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
-            end
-
-            function χⁱʳ′(Ψ)
-                V = -2.*inputs["F_ext"][r[:]].*imag(γ().*Ψ).*inputs["D₀"].*real(Ψ)./((1+abs2(Ψ)).^2)
-                return sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,V,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
-            end
-
-            function χʳⁱ′(Ψ)
-                V = -2.*inputs["F_ext"][r[:]].*real(γ().*Ψ).*inputs["D₀"].*imag(Ψ)./((1+abs2(Ψ)).^2)
-                return sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,V,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
-            end
-
-            function χⁱⁱ′(Ψ)
-                V = -2.*inputs["F_ext"][r[:]].*imag(γ().*Ψ).*inputs["D₀"].*imag(Ψ)./((1+abs2(Ψ)).^2)
-                return sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,V,Nₓ*Nᵤ,Nₓ*Nᵤ,+)
-            end
-
-            function f!(Ψ,fvec)
-                ψ = similar(j,Complex128)
-                ψ = Ψ[1:length(j)]+im*Ψ[length(j)+1:2*length(j)]
-                temp = (∇²+ɛω²+χ(ψ)*ω²)*ψ - j
-                fvec[1:length(j)]     = real(temp)
-                fvec[length(j)+1:2*length(j)] = imag(temp)
-            end
-
-            function jac!(Ψ,jacarr)
-                ψ = similar(j,Complex128)
-                ψ = Ψ[1:length(j)]+im*Ψ[length(j)+1:2*length(j)]
-                temp = ∇²+ɛω²+χ(ψ)*ω²
-                tempr = similar(temp,Float64)
-                tempi = similar(temp,Float64)
-                tr = nonzeros(tempr)
-                ti = nonzeros(tempi)
-                tr[:] = real((nonzeros(temp)))
-                ti[:] = imag((nonzeros(temp)))
-                tempj = [tempr+χʳʳ′(ψ) -tempi+χʳⁱ′(ψ); tempi+χⁱʳ′(ψ) tempr+χⁱⁱ′(ψ)]
-                jacarr[:,:] = tempj[:,:]
-            end
-
-            df = DifferentiableSparseMultivariateFunction(f!, jac!)
-            z = nlsolve(df,Ψ_init,show_trace = false,ftol = 2e-8, iterations = 750)
-
-            if converged(z)
-                ψ_ext = z.zero[1:length(j)] + im*z.zero[length(j)+1:2*length(j)]
-            else
-                ψ_ext = NaN*ψ_ext;
-            end
-
-        end
-
-        return ψ_ext,φ
 
     end
 
@@ -645,4 +608,4 @@ function solve_SPA(inputs,ω; z₀ = 0.0im)
 
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~
-end #end of module SALT
+end #end of module SALT_2d
