@@ -1,6 +1,7 @@
 module SALT_1d
 
-export processInputs, updateInputs, computePolesL, computePolesNL1, computePolesNL2, computeZerosL, computeZerosNL1, computeZerosNL2, computeCFs, solve_SPA, solve_scattered, solve_single_mode_lasing, solve_CPA, computeS, bootstrap, CF_analysis, CF_synthesis
+export processInputs, updateInputs, computePolesL, computePolesNL1, computePolesNL2, computeZerosL, computeZerosNL1, computeZerosNL2, computeCFs, solve_SPA, solve_scattered, solve_single_mode_lasing, solve_CPA, computeS, solve_CPA
+# bootstrap
 
 include("SALT_1d_Core.jl")
 
@@ -881,6 +882,23 @@ function solve_single_mode_lasing(inputs::Dict, D₀::Float64; ψ_init=0.000001,
 
 end 
 # end of function solve_lasing
+
+
+
+function solve_CPA(inputs::Dict, D₀::Float64; ψ_init=0.000001, k_init=inputs["ω₀"], inds=14, dispOpt=false)
+   
+    inputs1 = deepcopy(inputs)
+    
+    inputs1["ɛ_ext"] = conj(inputs1["ɛ_ext"])
+    inputs1["Γ_ext"] = conj(inputs["Γ_ext"])
+    inputs1["γ⟂"] = -inputs["γ⟂"]
+    
+    ψ_ext,k = solve_single_mode_lasing(inputs1, -D₀; ψ_init=conj(ψ_init), ω_init=k_init, inds=inds, dispOpt=dispOpt)
+    
+    return conj(ψ_ext),k
+    
+end # solve_CPA
+
 
 
 ############################################################################################

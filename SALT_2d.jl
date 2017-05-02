@@ -1,6 +1,6 @@
 module SALT_2d
 
-export processInputs, updateInputs, computeCFs, computePolesL, computeZerosL, computePolesNL1, computeZerosNL1, computePolesNL2, computeZerosNL2
+export processInputs, updateInputs, computeCFs, computePolesL, computeZerosL, computePolesNL1, computeZerosNL1, computePolesNL2, computeZerosNL2, solve_scattered
 #, updateInputs, computePolesL, computePolesNL1, computePolesNL2, computeZerosL, computeZerosNL1, computeZerosNL2, computeCFs, solve_SPA, solve_scattered, solve_single_mode_lasing, solve_CPA, computeS, bootstrap, CF_analysis, CF_synthesis, computeZerosL2
 
 include("SALT_2d_Core.jl")
@@ -13,11 +13,6 @@ using Formatting
 
 
 #######################################################################################################
-
-using .Core
-using NLsolve
-using Formatting
-
 
 
 function computeCFs(inputs::Dict, k::Number, nTCFs::Int; bc = "out", F=1., η_init = [], ψ_init = [])
@@ -58,7 +53,7 @@ function computePolesL(inputs::Dict, k::Number, nPoles::Int; F=1., truncate = fa
     r = whichRegion((x_ext,y_ext), inputs)
     ɛ_ext, F_ext = subpixelSmoothing(inputs; truncate = false, r = r)
     
-    ∇² = laplacian(k,inputs)
+    ∇², ∇ₓ², ∇ᵤ² = laplacian(k,inputs)
         
     ɛ⁻¹ = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, 1./(ɛ_ext[:]-1im*D₀.*F.*F_ext[:]), Nₓ*Nᵤ, Nₓ*Nᵤ, +)    
     (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛ⁻¹*∇²,which = :LM, nev = nPoles, sigma = k^2)
@@ -220,7 +215,7 @@ function computePolesNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=10
     ##end of definitions block
 
 
-    ∇² = laplacian(k,inputs)
+    ∇², ∇ₓ², ∇ᵤ² = laplacian(k,inputs)
     ɛ_ext, F_ext = subpixelSmoothing(inputs; truncate = false)
 
     function γ(k′)
@@ -339,30 +334,36 @@ function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, dispOpt = f
         ∂_ext = inputs["∂_ext"]
         N_ext = inputs["N_ext"]; Nₓ = N_ext[1]; Nᵤ = N_ext[2]
         D₀ = inputs["D₀"]
-        γ⊥ = inputs["γ⊥"]
+        γ⟂ = inputs["γ⟂"]
         k₀ = inputs["k₀"]
         incidentWave = inputs["incidentWave"]
     ## END OF DEFINITIONS BLOCK ##
 
     k²= k^2
-    dx²=dx^2
-    dy²=dy^2
+    N_ext = prod(N_ext)
 
     function γ()
-        return γ⊥/(k-k₀+1im*γ⊥)
+        return γ⟂/(k-k₀+1im*γ⟂)
     end
     
     r = whichRegion((x_ext,y_ext), inputs)
     ɛ_ext, F_ext = subpixelSmoothing(inputs; truncate = false, r = r)
     
-    ∇² = laplacian(k,inputs)
-
+    ∇², ∇ₓ², ∇ᵤ² = laplacian(k,inputs)
     ɛk² = sparse(1:N_ext, 1:N_ext, ɛ_ext[:]*k², N_ext, N_ext, +)
     χk² = sparse(1:N_ext, 1:N_ext, D₀*γ()*F.*F_ext[:]*k², N_ext, N_ext, +)
-    K²  = sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,fill(K²,Nₓ*Nᵤ),Nₓ*Nᵤ,Nₓ*Nᵤ,+)
+    K²  = sparse(1:Nₓ*Nᵤ,1:Nₓ*Nᵤ,fill(k²,Nₓ*Nᵤ),Nₓ*Nᵤ,Nₓ*Nᵤ,+)
 
-    φ = incidentWave(find(r.>9),k,inputs)
-    j = (∇²+K²)*φ
+#    return inputs["geometry"], find(indexin(r,inputs["incident_wave_regions"]+8).>0), k, inputs
+    φ = incidentWave(find(indexin(r,inputs["incident_wave_regions"]+8).>0),k,inputs)
+
+    inputs1 = deepcopy(inputs)
+    incident_bool = indexin(1:length(inputs1["ɛ"]), setdiff(1:length(inputs1["ɛ"]),inputs1["scatterer_regions"]) ).>0
+    inputs1["ɛ"] = (inputs1["ɛ"][:].*incident_bool[:] + !incident_bool[:]).'
+    inputs1 = updateInputs(inputs1)
+    ɛ1, F1 = subpixelSmoothing(inputs1; truncate = false)
+    ɛK² = sparse(1:N_ext, 1:N_ext, ɛ1[:]*k², Nₓ*Nᵤ, Nₓ*Nᵤ, +)
+    j = (∇²+ɛK²)*φ
 
     if ψ_init == 0 || !isNonLinear
         ψ_ext = (∇²+ɛk²+χk²)\j

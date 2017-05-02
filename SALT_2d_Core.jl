@@ -114,7 +114,6 @@ end # end of function grad
 function laplacian(k::Number,inputs::Dict)
 
     ∂ = inputs["∂_ext"]
-    geometry = inputs["geometry"]
     x = inputs["x_ext"]
     y = inputs["u_ext"]
     bc = inputs["bc"]
@@ -169,7 +168,7 @@ function laplacian(k::Number,inputs::Dict)
     
     ∇² = scrambleX(∇ₓ²,Nᵤ) + scrambleY(∇ᵤ²,Nₓ)
     
-    return ∇²
+    return ∇², ∇ₓ², ∇ᵤ²
 
 end # end of function laplacian
 
@@ -221,7 +220,7 @@ function whichRegion(xy,inputs::Dict)
 
     for i in 1:length(x), j in 1:length(y)
 
-        region[i,j] = 8 + geometry(x[i], y[j], ∂[5:end])
+        region[i,j] = 8 + geometry(x[i], y[j], ∂[5:end], inputs)
         
         if region[i,j] == 9
             if ∂[1] ≤ x[i] ≤ ∂[5]
@@ -323,8 +322,10 @@ end # end of function trapz
 function processInputs(fileName = "./SALT_2d_Inputs.jl")
 
    
-    (N, λ₀, λ, ∂, bc, F, ɛ, γ⟂, D₀, a, geometry, incidentWave, extras) = evalfile(fileName)
-
+    (N, λ₀, λ, ∂, bc, F, ɛ, γ⟂, D₀, a, geometryFile, incidentWaveFile, extras) = evalfile(fileName)
+    incident_wave_regions, scatterer_regions, geometry = include(geometryFile)
+    incidentWave = include(incidentWaveFile)
+    
     ω₀ = 2π./λ₀
     ω  = 2π./λ
     k  = ω
@@ -412,8 +413,12 @@ function processInputs(fileName = "./SALT_2d_Inputs.jl")
         "γ⟂" => γ⟂,
         "D₀" => D₀,
         "a" => a,
+        "geometryFile" => geometryFile,
         "geometry" => geometry,
+        "incidentWaveFile" => incidentWaveFile,
         "incidentWave" => incidentWave,
+        "incident_wave_regions" => incident_wave_regions,
+        "scatterer_regions" => scatterer_regions,
         "extras" => extras,
         "dN" => dN)
 
@@ -492,6 +497,9 @@ function updateInputs(inputs::Dict)
 
     ɛ_ext = [1 1 1 1 1 1 1 1 ɛ]
        
+    incident_wave_regions, scatterer_regions, geometry = include(inputs["geometryFile"])
+    incidentWave = include(inputs["incidentWaveFile"])
+    
     inputsNew = Dict{Any,Any}(
         "λ" => λ,
         "λ₀" => λ₀,
@@ -523,8 +531,12 @@ function updateInputs(inputs::Dict)
         "γ⟂" => inputs["γ⟂"],
         "D₀" => inputs["D₀"],
         "a" => inputs["a"],
-        "geometry" => inputs["geometry"],
-        "incidentWave" => inputs["incidentWave"],
+        "geometryFile" => inputs["geometryFile"],
+        "geometry" => geometry,
+        "incidentWaveFile" => inputs["incidentWaveFile"],
+        "incidentWave" => incidentWave,
+        "incident_wave_regions" => inputs["incident_wave_regions"],
+        "scatterer_regions" => inputs["scatterer_regions"],
         "extras" => inputs["extras"],
         "dN" => dN)
 
@@ -551,7 +563,7 @@ function computeCFs_Core(inputs::Dict, k::Number, nTCFs::Int; F=1., η_init = []
 
     ɛ_ext, F_ext = subpixelSmoothing(inputs; truncate = false)    
 
-    ∇² = laplacian(k, inputs)
+    ∇², ∇ₓ², ∇ᵤ² = laplacian(k, inputs)
 
     ɛk² = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, ɛ_ext[:]*k², Nₓ*Nᵤ, Nₓ*Nᵤ, +)
     sF  = sparse(1:Nₓ*Nᵤ, 1:Nₓ*Nᵤ, sign(F.*F_ext[:]), Nₓ*Nᵤ, Nₓ*Nᵤ, +)
