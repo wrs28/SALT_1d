@@ -94,7 +94,7 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
         γ⟂ = inputs["γ⟂"]
     ##end of definitions block
 
-    ∇² = laplacian(k,inputs)
+    ∇², ∇ₓ², ∇ᵤ² = laplacian(k,inputs)
     ɛ_ext, F_ext = subpixelSmoothing(inputs; truncate = false)
     
     function γ(k′)

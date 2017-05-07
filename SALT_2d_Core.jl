@@ -322,9 +322,8 @@ end # end of function trapz
 function processInputs(fileName = "./SALT_2d_Inputs.jl")
 
    
-    (N, λ₀, λ, ∂, bc, F, ɛ, γ⟂, D₀, a, geometryFile, incidentWaveFile, extras) = evalfile(fileName)
-    incident_wave_regions, scatterer_regions, geometry = include(geometryFile)
-    incidentWave = include(incidentWaveFile)
+    (N, λ₀, λ, ∂, bc, F, ɛ, γ⟂, D₀, a, geometryFile, incidentWaveFile, extras, incident_wave_regions, scatterer_regions, geometry, incidentWave) = evalfile(fileName)
+    
     
     ω₀ = 2π./λ₀
     ω  = 2π./λ
@@ -496,9 +495,6 @@ function updateInputs(inputs::Dict)
     F_ext = [F_min F_min F_min F_min F_min F_min F_min F_min F]
 
     ɛ_ext = [1 1 1 1 1 1 1 1 ɛ]
-       
-    incident_wave_regions, scatterer_regions, geometry = include(inputs["geometryFile"])
-    incidentWave = include(inputs["incidentWaveFile"])
     
     inputsNew = Dict{Any,Any}(
         "λ" => λ,
@@ -532,9 +528,9 @@ function updateInputs(inputs::Dict)
         "D₀" => inputs["D₀"],
         "a" => inputs["a"],
         "geometryFile" => inputs["geometryFile"],
-        "geometry" => geometry,
+        "geometry" => inputs["geometry"],
         "incidentWaveFile" => inputs["incidentWaveFile"],
-        "incidentWave" => incidentWave,
+        "incidentWave" => inputs["incidentWave"],
         "incident_wave_regions" => inputs["incident_wave_regions"],
         "scatterer_regions" => inputs["scatterer_regions"],
         "extras" => inputs["extras"],
