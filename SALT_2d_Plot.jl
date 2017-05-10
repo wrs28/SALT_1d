@@ -121,6 +121,8 @@ axis("tight")
         
     end
     
+    return (x,y,ψ_plot)
+    
 end # end of function wavePlot
 
 #~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
