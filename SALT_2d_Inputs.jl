@@ -8,8 +8,9 @@ R = .5 # radius of disk
 λ  = 2π*R./linspace(9,11,10)
 
 origin = (0.,0.)
-∂ =  [-1   1    -1    1]*1.2*R + [origin[1] origin[1] origin[2] origin[2]]
-bc = ["o"  "o"  "o"  "o"]  
+∂  =  [-1   1    -1    1]*1.2*R + [origin[1] origin[1] origin[2] origin[2]]
+bc =  ["o"  "o"  "o"  "o"]
+bk = [1.       0.] # Bloch wave vector [kₓ kᵤ]
 
 F = [0.0   1.0   0.0]
 ɛ = [1.0   n     n  ].^2
@@ -24,4 +25,4 @@ extras = (origin,π/3,R,β) #(θ,R) this is in general a tuplet
 geometryFile = "SALT_2d_Geometry.jl"
 incidentWaveFile = "SALT_2d_IncidentWave.jl"
 
-return (N, λ₀, λ, ∂, bc, F, ɛ, γ⊥, D₀, a, geometryFile, incidentWaveFile, extras)
+return (N, λ₀, λ, ∂, bc, bk, F, ɛ, γ⊥, D₀, a, geometryFile, incidentWaveFile, extras)

@@ -117,7 +117,10 @@ function laplacian(k::Number,inputs::Dict)
     x = inputs["x_ext"]
     y = inputs["u_ext"]
     bc = inputs["bc"]
-
+    
+    kₓ = inputs["bk"][1]
+    kᵤ = inputs["bk"][2]
+    
     ℓₓ = inputs["ℓ_ext"][1]
     ℓᵤ = inputs["ℓ_ext"][2]
 
@@ -141,8 +144,8 @@ function laplacian(k::Number,inputs::Dict)
     ∇ᵤ² = -(sᵤ₂*∇ᵤ.'*sᵤ₁*∇ᵤ)
     ind = [1 Nₓ 1 Nᵤ 1]
     for i in 1:4
-        if i < 3
-            if bc[i] in ["o" "open" "r" "radiating" "sommerfeld" "Sommerfeld" "s"]
+        if i ≤ 2
+            if bc[i] in ["o" "open"]
                 ∇ₓ²[ind[i],ind[i]]   += -2/dx^2
             elseif bc[i] in ["d" "dirichlet" "Dirichlet" "hard"]
                 ∇ₓ²[ind[i],ind[i]]   += -2/dx^2
@@ -150,10 +153,10 @@ function laplacian(k::Number,inputs::Dict)
                 ∇ₓ²[ind[i],ind[i]]   += 0
             elseif bc[i] in ["p" "periodic"]
                 ∇ₓ²[ind[i],ind[i]]   += -1/dx^2
-                ∇ₓ²[ind[i],ind[i+1]] += +1/dx^2
+                ∇ₓ²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓₓ*kₓ)/dx^2
             end
         else
-            if bc[i] in ["o" "open" "r" "radiating" "sommerfeld" "Sommerfeld" "s"]
+            if bc[i] in ["o" "open"]
                 ∇ᵤ²[ind[i],ind[i]]   += -2/du^2
             elseif bc[i] in ["d" "dirichlet" "Dirichlet" "hard"]
                 ∇ᵤ²[ind[i],ind[i]]   += -2/du^2
@@ -161,7 +164,7 @@ function laplacian(k::Number,inputs::Dict)
                 ∇ᵤ²[ind[i],ind[i]]   += 0
             elseif bc[i] in ["p" "periodic"]
                 ∇ᵤ²[ind[i],ind[i]]   += -1/du^2
-                ∇ᵤ²[ind[i],ind[i+1]] += +1/du^2
+                ∇ᵤ²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓᵤ*kᵤ)/du^2
             end
         end
     end
@@ -257,7 +260,7 @@ end # end of function whichRegion
 
 
 function subpixelSmoothing(inputs; truncate = false, r = [])
-    # for now it's exclusively for ɛ, could feasibly be extended eventually...
+    # for now it's for ɛ and F, could feasibly be extended eventually...
     
     if truncate
         x = inputs["x"]
@@ -322,7 +325,7 @@ end # end of function trapz
 function processInputs(fileName = "./SALT_2d_Inputs.jl")
 
    
-    (N, λ₀, λ, ∂, bc, F, ɛ, γ⟂, D₀, a, geometryFile, incidentWaveFile, extras, incident_wave_regions, scatterer_regions, geometry, incidentWave) = evalfile(fileName)
+    (N, λ₀, λ, ∂, bc, bk, F, ɛ, γ⟂, D₀, a, geometryFile, incidentWaveFile, extras, incident_wave_regions, scatterer_regions, geometry, incidentWave) = evalfile(fileName)
     
     
     ω₀ = 2π./λ₀
@@ -347,11 +350,11 @@ function processInputs(fileName = "./SALT_2d_Inputs.jl")
     for i in 1:4
         if bc[i] in ["o" "open"]
             dN[i] = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
-        elseif bc in ["d" "dirichlet" "Dirichlet" "hard"]
+        elseif bc[i] in ["d" "dirichlet" "Dirichlet" "hard"]
             dN[i] = 0
-        elseif bc in ["n" "neumann"   "Neumann"   "soft"]
+        elseif bc[i] in ["n" "neumann"   "Neumann"   "soft"]
             dN[i] = 0
-        elseif bc in ["p" "periodic"]
+        elseif bc[i] in ["p" "periodic"]
             dN[i] = 0
         end
     end
@@ -401,6 +404,7 @@ function processInputs(fileName = "./SALT_2d_Inputs.jl")
         "xu_inds" => xu_inds,
         "∂" => ∂,
         "bc" => bc,
+        "bk" => bk,
         "ɛ" => ɛ,
         "F" => F,
         "N_ext" => N_ext,
@@ -436,6 +440,7 @@ function updateInputs(inputs::Dict)
     F = inputs["F"]
     ɛ = inputs["ɛ"]
     bc = inputs["bc"]
+    bk = inputs["bk"]
 
     ######################
     
@@ -515,6 +520,7 @@ function updateInputs(inputs::Dict)
         "xu_inds" => xu_inds,
         "∂" => ∂,
         "bc" => bc,
+        "bk" => bk,
         "ɛ" => ɛ,
         "ɛ" => ɛ,
         "F" => F,
@@ -557,7 +563,7 @@ function computeCFs_Core(inputs::Dict, k::Number, nTCFs::Int; F=1., η_init = []
     
     k²= k^2
 
-    ɛ_ext, F_ext = subpixelSmoothing(inputs; truncate = false)    
+    ɛ_ext, F_ext = subpixelSmoothing(inputs)
 
     ∇², ∇ₓ², ∇ᵤ² = laplacian(k, inputs)
 

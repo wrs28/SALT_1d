@@ -1,16 +1,20 @@
 module Core
 
-export laplacian, σ, whichRegion, trapz, dirac_δ, heaviside_Θ, processInputs, updateInputs, computeCFs_Core
+export laplacian, σ, whichRegion, trapz, dirac_δ, heaviside_Θ, subpixelSmoothing, processInputs, updateInputs
 
 #############################################################
 
 PML_extinction = 1e6
-PML_ρ = 1/4
+PML_ρ = 1/6
 PML_power_law = 2
 F_min = 1e-15
-dN2 = 5 # to do: remove this extra layer, it's no longer necessary
+α_imag = -.25
+subPixelNum = 15
 
-function grad(N::Int,dx::Float64)
+###################################################
+
+
+function grad(N::Int, dx::Float64)
 
     I₁ = collect(1:N)
     J₁ = collect(1:N)
@@ -25,37 +29,84 @@ function grad(N::Int,dx::Float64)
 end # end of function grad
 
 
-function laplacian(ℓ::Float64,N::Int,Σ)
+function laplacian(k::Number, inputs::Dict)
 
-    dx = ℓ/(N-1); dx² = dx^2
+    # definitions block#
+    N = inputs["N_ext"]
+    bc = inputs["bc"]
+    a = inputs["a"]
+    b = inputs["b"]
+    dx = inputs["dx"]
+    dx² = dx^2
+    ##
+    
+    # generate robin parameter
+    λ = zeros(Complex128,2)
+    for i in 1:2
+        λ[i] = -(-1)^i*1im*k*(b[i]-a[i])/(b[i]+a[i])
+    end
+    
     ∇ = grad(N-1,dx)
 
+    # create PML layer
+    Σ = 1+1im*σ(inputs)/real(k)
     s₁ = sparse(1:N-1,1:N-1,2./( Σ[1:end-1] + Σ[2:end] ),N-1,N-1)
     s₂ = sparse(1:N,1:N,1./Σ,N,N)
-
     ∇² = -s₂*∇.'*s₁*∇
 
-    ∇²[1,1]     += -2/dx²
-    ∇²[end,end] += -2/dx²
-
+    # truncate
+    ind = [1 N 1]
+    for i in 1:2
+        if bc[i] in ["pml_out" "pml_in"] 
+            ∇²[ind[i],ind[i]]   += -2/dx²
+        elseif bc[i] in ["d" "dirichlet" "Dirichlet" "hard"]
+            ∇²[ind[i],ind[i]]   += -2/dx²
+        elseif bc[i] in ["n" "neumann" "Neumann" "soft"]
+            ∇²[ind[i],ind[i]]   += 0
+        elseif bc[i] in ["p" "periodic"]
+            ∇²[ind[i],ind[i]]   += -1/dx²
+            ∇²[ind[i],ind[i+1]] += +1/dx²
+        elseif bc[i] in ["o" "out" "outgoing"]
+            ∇²[ind[i],ind[i]]   += +(1im*k/dx)/(1-1im*dx*k/2)
+        elseif bc[i] in ["i" "in" "incoming" "incident"]
+            ∇²[ind[i],ind[i]]   += -(1im*k/dx)/(1+1im*dx*k/2)
+        elseif bc[i] in ["r" "robin"]
+            ∇²[ind[i],ind[i]]   += -(-1)^i*(1/dx)*(λ[i]/(1+(-1)^i*λ[i]*dx/2))
+        else
+            println("error in bc specification, not valid")
+            return
+        end
+    end
+    
     return ∇²
 
 end # end of function laplacian
 
 
-function σ(x,∂)
+function σ(inputs::Dict)
 
-    dx = x[2]-x[1]
-    α = ( (PML_ρ/dx)^(PML_power_law+1) )/ ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law
+    x = inputs["x_ext"]
+    dx = inputs["dx"]
+    ∂ = inputs["∂_ext"]
 
-    r = whichRegion(x,∂)
-    s = similar(r,Float64)
+    α = zeros(Complex128,2)
+    for i in 1:2
+        if inputs["bc"][i] == "pml_out"
+            α[i] = +(1+α_imag*1im)*( (PML_ρ/dx)^(PML_power_law+1) )/ ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law
+        elseif inputs["bc"][i] == "pml_in"
+            α[i] = -(1+α_imag*1im)*( (PML_ρ/dx)^(PML_power_law+1) )/ ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law
+        else
+            α[i] = 0
+        end
+    end
 
-    for i in 1:length(r)
-        if r[i] == 1
-            s[i] = α*abs(x[i]-∂[2])^PML_power_law
-        elseif r[i] == length(∂)-1
-            s[i] = α*abs(x[i]-∂[end-1])^PML_power_law
+    s = zeros(Complex128,length(x))
+
+    for i in 1:length(x)
+        if x[i] ≤ ∂[2]
+            s[i] = α[1]*abs(x[i]-∂[2])^PML_power_law
+        elseif x[i] ≥ ∂[end-1]
+            s[i] = α[2]*abs(x[i]-∂[end-1])^PML_power_law
         else
             s[i] = 0
         end
@@ -91,7 +142,7 @@ function whichRegion(x,∂)
     return region
 
 end 
-# end of function whichRegionn
+# end of function whichRegion
 
 
 function trapz(z,dx::Float64)
@@ -110,7 +161,6 @@ function dirac_δ(x,x₀::Float64)
     ind₂ = ind₁ + (2*mod(findmin([findmin(abs2(x[ind₁+1]-x₀))[1] findmin(abs2(x[ind₁-1]-x₀))[1]])[2],2)[1] -1)
     min_ind = min(ind₁,ind₂)
     max_ind = max(ind₁,ind₂)
-
 
     x₁ = x[min_ind]
     x₂ = x[max_ind]
@@ -167,14 +217,54 @@ end
 
 
 
-function processInputs()
+function subpixelSmoothing(inputs; truncate = false, r = [])
+    # for now it's for ɛ and F, could feasibly be extended eventually...
+    
+    if truncate
+        x = inputs["x"]
+    else
+        x = inputs["x_ext"]
+    end
+    
+    if isempty(r)
+        r = whichRegion(x, inputs["∂_ext"]) 
+    end
 
-    (N, λ₀, λ, ∂, Γ, F, ɛ, γ⟂, D₀, a) = evalfile("SALT_1d_Inputs.jl")
+    ɛ = inputs["ɛ_ext"]
+    F = inputs["F_ext"]
+    ɛ_smoothed = deepcopy(ɛ[r])
+    F_smoothed = deepcopy(F[r])
+    
+    for i in 2:(length(x)-1)
+        
+        nearestNeighborFlag = (r[i]!==r[i+1]) | (r[i]!==r[i-1])
+        
+        if nearestNeighborFlag
+            
+            x_min = (x[i]+x[i-1])/2
+            x_max = (x[i]+x[i+1])/2
+            
+            X = linspace(x_min,x_max,subPixelNum)
+            
+            subRegion = whichRegion(X, inputs["∂_ext"])
+            ɛ_smoothed[i] = mean(ɛ[subRegion])
+            F_smoothed[i] = mean(F[subRegion])
+            
+        end
+        
+    end
+    
+    return ɛ_smoothed, F_smoothed
+    
+end # end of function subpixelSmoothing
 
-    ω₀ = 2π./λ₀
-    ω  = 2π./λ
-    k  = ω
-    k₀ = ω₀
+
+function processInputs(fileName = "./SALT_1d_Inputs.jl")
+
+    (N, k₀, k, bc, ∂, Γ, F, ɛ, γ⟂, D₀, a, b) = evalfile(fileName)
+
+    ω₀ = k₀
+    ω  = k
     ℓ = ∂[end] - ∂[1]
 
     xᵨ₊ = (∂[1]+∂[2])/2
@@ -184,28 +274,45 @@ function processInputs()
 
     dx = ℓ/(N-1);
     n = 1/dx
-#    dN1 = ceil(Integer,2.5*λ₀*n)
-#    dN2 = ceil(Integer,0.25*λ₀*n)
-    dN1 = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
-    N_ext = N + 2(dN1+dN2)
+
+    dN = [0 0]
+    for i in 1:2
+        if bc[i] in ["o" "out" "outgoing"]
+            dN[i] = 0
+        elseif bc[i] in ["i" "in" "incoming" "incident"]
+            dN[i] = 0
+        elseif bc[i] in ["d" "dirichlet" "Dirichlet" "hard"]
+            dN[i] = 0
+        elseif bc[i] in ["n" "neumann"   "Neumann"   "soft"]
+            dN[i] = 0
+        elseif bc[i] in ["p" "periodic"]
+            dN[i] = 0
+        elseif bc[i] in ["pml_out" "pml_in"]
+            dN[i] = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
+        elseif bc[i] in ["r" "robin"]
+            dN[i] = 0
+        else
+            println("error in bc specification, not valid")
+            return
+        end
+    end
+
+    N_ext = N + sum(dN)
     ℓ_ext = dx*(N_ext-1)
 
-#    x_ext = linspace(-(dN1+dN2)*dx+∂[1], (dN1+dN2)*dx+∂[end], N_ext)
-    x_ext = vcat(-[(dN1+dN2):-1:1;]*dx+∂[1],  linspace(∂[1],∂[end],N), [1:(dN1+dN2);]*dx+∂[end])
-    x_inds = dN1+dN2+collect(1:N)
+    x_ext = vcat(-[dN[1]:-1:1;]*dx+∂[1],  linspace(∂[1],∂[end],N), [1:dN[2];]*dx+∂[end])
+    x_inds = dN[1]+collect(1:N)
     x = x_ext[x_inds]
 
-    ∂_ext = [x_ext[1]-dx/2 x_ext[dN1+1] ∂ x_ext[dN1+dN2+N+dN2+1] x_ext[end]+dx/2]
+    ∂_ext = [x_ext[1]-dx/2 ∂ x_ext[end]+dx/2]
 
     F[F .== zero(Float64)] = F_min
-    F_ext = [F_min F_min F F_min F_min]
+    F_ext = [F_min F F_min]
 
-    ɛ_ext = [1 1 ɛ 1 1]
-    Γ_ext = [Inf Inf  Γ Inf Inf]
+    ɛ_ext = [1 ɛ 1]
+    Γ_ext = [Inf Γ Inf]
 
     inputs = Dict{Any,Any}(
-        "λ" => λ,
-        "λ₀" => λ₀,
         "ω" => ω,
         "ω₀" => ω₀,
         "k" => k,
@@ -229,10 +336,11 @@ function processInputs()
         "γ⟂" => γ⟂,
         "D₀" => D₀,
         "a" => a,
+        "b" => b,
         "Γ" => Γ,
         "Γ_ext" => Γ_ext,
-        "dN1" => dN1,
-        "dN2" => dN2)
+        "dN" => dN,
+        "bc" => bc)
 
     return(inputs)
 
@@ -245,46 +353,66 @@ function updateInputs(inputs::Dict)
 
     ∂ = inputs["∂"]
     N = inputs["N"]
-    λ₀ = inputs["λ₀"]
-    λ = inputs["λ"]
+    k₀ = inputs["k₀"]
+    k = inputs["k"]
     F = inputs["F"]
     ɛ = inputs["ɛ"]
     Γ = inputs["Γ"]
+    bc = inputs["bc"]
+    a = inputs["a"]
+    b = inputs["b"]
     
     xᵨ₊ = (∂[1]+∂[2])/2
     xᵨ₋ = (∂[end-1]+∂[end])/2
     
-    ω₀ = 2π./λ₀
-    ω = 2π./λ
-    k = ω
-    k₀ = ω₀
+    ω₀ = k₀
+    ω = k
+
     ℓ = ∂[end] - ∂[1]
 
     ##########################
 
     dx = ℓ/(N-1);
     n = 1/dx
-#    dN1 = ceil(Integer,2.5*λ₀*n)
-#    dN2 = ceil(Integer,0.25*λ₀*n)
-    dN1 = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
-    N_ext = N + 2(dN1+dN2)
+
+    dN = [0 0]
+    for i in 1:2
+        if bc[i] in ["o" "out" "outgoing"]
+            dN[i] = 0
+        elseif bc[i] in ["i" "in" "incoming" "incident"]
+            dN[i] = 0
+        elseif bc[i] in ["d" "dirichlet" "Dirichlet" "hard"]
+            dN[i] = 0
+        elseif bc[i] in ["n" "neumann"   "Neumann"   "soft"]
+            dN[i] = 0
+        elseif bc[i] in ["p" "periodic"]
+            dN[i] = 0
+        elseif bc[i] in ["pml_out" "pml_in"]
+            dN[i] = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
+        elseif bc[i] in ["r" "robin"]
+            dN[i] = 0
+        else
+            println("error in bc specification, not valid")
+            return
+        end
+    end
+
+    N_ext = N + sum(dN)
     ℓ_ext = dx*(N_ext-1)
 
-    x_ext = vcat(-[(dN1+dN2):-1:1;]*dx+∂[1],  linspace(∂[1],∂[end],N), [1:(dN1+dN2);]*dx+∂[end])
-    x_inds = dN1+dN2+collect(1:N)
+    x_ext = vcat(-[dN[1]:-1:1;]*dx+∂[1],  linspace(∂[1],∂[end],N), [1:dN[2];]*dx+∂[end])
+    x_inds = dN[1]+collect(1:N)
     x = x_ext[x_inds]
 
-    ∂_ext = [x_ext[1]-dx/2 x_ext[dN1+1] ∂ x_ext[dN1+dN2+N+dN2+1] x_ext[end]+dx/2]
+    ∂_ext = [x_ext[1]-dx/2 ∂ x_ext[end]+dx/2]
 
     F[F .== zero(Float64)] = F_min
-    F_ext = [F_min F_min F F_min F_min]
+    F_ext = [F_min F F_min]
 
-    ɛ_ext = [1 1 ɛ 1 1]
-    Γ_ext = [Inf Inf  Γ Inf Inf]
+    ɛ_ext = [1 ɛ 1]
+    Γ_ext = [Inf Γ Inf]
 
     inputsNew = Dict{Any,Any}(
-        "λ" => λ,
-        "λ₀" => λ₀,
         "ω" => ω,
         "ω₀" => ω₀,
         "k" => k,
@@ -308,72 +436,16 @@ function updateInputs(inputs::Dict)
         "γ⟂" => inputs["γ⟂"],
         "D₀" => inputs["D₀"],
         "a" => inputs["a"],
+        "b" => inputs["b"],
         "Γ" => Γ,
         "Γ_ext" => Γ_ext,
-        "dN1" => dN1,
-        "dN2" => dN2)
+        "dN" => dN,
+        "bc" => bc)
 
     return(inputsNew)
 
 end 
 # end of function updateInputs
-
-
-
-
-function computeCFs_Core(inputs::Dict, k::Number, nTCFs::Int; F=1., η_init = [], ψ_init = [])
-# No Line Pulling, calculation independent of pump D
-
-    ## definitions block
-    dx = inputs["dx"]
-    x_ext = inputs["x_ext"]
-    ∂_ext = inputs["∂_ext"]
-    ℓ_ext = inputs["ℓ_ext"]
-    N_ext = inputs["N_ext"]
-    λ = inputs["λ"]
-    x_inds = inputs["x_inds"]
-    F_ext = inputs["F_ext"]
-    Γ_ext = inputs["Γ_ext"]
-    ɛ_ext = inputs["ɛ_ext"]
-    ##
-    
-    k²= k^2
-
-    r = whichRegion(x_ext,∂_ext)
-
-    ∇² = laplacian(ℓ_ext, N_ext, 1+1im*σ(x_ext,∂_ext)/k)
-
-    Γ = zeros(N_ext,1)
-    for dd in 2:length(∂_ext)-1
-        δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
-        Γ = Γ[:] + full(δ)/Γ_ext[dd]
-    end
-
-    ɛk² = sparse(1:N_ext, 1:N_ext, ɛ_ext[r]*k²   ,N_ext, N_ext, +)
-    Γk² = sparse(1:N_ext, 1:N_ext, Γ[:]*k²       , N_ext, N_ext, +)
-    sF = sparse(1:N_ext, 1:N_ext, sign(F.*F_ext[r]), N_ext, N_ext, +)
-    FF = sparse(1:N_ext, 1:N_ext, abs(F.*F_ext[r]), N_ext, N_ext, +)
-
-    if isempty(η_init) & isempty(ψ_init)
-        (η,ψ_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²+Γk²)/k²,FF, which = :LM, nev = nTCFs, sigma = 1e-8)
-    elseif !isempty(η_init) & isempty(ψ_init)
-        (η,ψ_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²+Γk²)/k²,FF, which = :LM, nev = nTCFs, sigma = η_init)
-    elseif !isempty(η_init) & !isempty(ψ_init)
-        (η,ψ_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²+Γk²)/k²,FF, which = :LM, nev = nTCFs, sigma = η_init, v0 = ψ_init)
-    end
-
-    ψ = zeros(Complex128,length(inputs["x_ext"]),nTCFs)
-
-    for ii = 1:length(η)
-        N = trapz(ψ_ext[:,ii].*F.*F_ext[r].*ψ_ext[:,ii],dx)
-        ψ_ext[:,ii] = ψ_ext[:,ii]/sqrt(N)
-        ψ[:,ii] = ψ_ext[:,ii]
-    end
-
-    return η,ψ
-
-end
-#end of function computeCFs_Core
 
 #######################################################################
 
