@@ -73,9 +73,9 @@ function computePolesL(inputs::Dict, k::Number, nPoles::Int; F=1., truncate = fa
     end
    
     if truncate
-        return sqrt(k²),ψ[inds,:]
+        return sqrt.(k²),ψ[inds,:]
     else
-        return sqrt(k²),ψ
+        return sqrt.(k²),ψ
     end
     
     
@@ -226,7 +226,7 @@ function computePolesNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=10
     A₀ = zeros(Complex128,N_ext,nevals)
     A₁ = zeros(Complex128,N_ext,nevals)
 
-    rad(a,b,θ) = b./sqrt(sin(θ).^2+(b/a)^2.*cos(θ).^2)
+    rad(a,b,θ) = b./sqrt.(sin(θ).^2+(b/a)^2.*cos(θ).^2)
     θ = angle(inputs["k₀"]-1im*inputs["γ⟂"]-k)
     flag = abs(inputs["k₀"]-1im*inputs["γ⟂"]-k) < rad(Radii[1],Radii[2],θ)
     
