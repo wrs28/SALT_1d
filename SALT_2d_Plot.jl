@@ -94,7 +94,7 @@ axis("tight")
             setp(axt[:get_yticklabels](),visible=false)
 
             subplot(N+1,3,3+3*(i-1)+3); axt = gca()
-            pcolormesh(x,y,abs2(ψ_plot[i,:,:]).',cmap = "gray_r")
+            pcolormesh(x,y,abs2.(ψ_plot[i,:,:]).',cmap = "gray_r")
             xlim( [ ∂[1],∂[2] ] )
             ylim( [ ∂[3],∂[4] ] )
 axis("tight")
@@ -113,7 +113,7 @@ axis("tight")
             else
                 cmap = "bwr"
             end
-            pcolormesh(x,y,how(ψ_plot[i,:,:]).',cmap=cmap)
+            pcolormesh(x,y,how.(ψ_plot[i,:,:]).',cmap=cmap)
             xlim( [ ∂[1],∂[2] ] )
             ylim( [ ∂[3],∂[4] ] )
             axis("equal")
