@@ -1,34 +1,51 @@
 module Core
 
-export laplacian, σ, whichRegion, trapz, dirac_δ, heaviside_Θ, subpixelSmoothing, processInputs, updateInputs
+export laplacian, whichRegion, trapz, dirac_δ, heaviside_Θ, subpixelSmoothing, processInputs, updateInputs
 
 #############################################################
 
 PML_extinction = 1e6
 PML_ρ = 1/6
-PML_power_law = 2
-F_min = 1e-15
-α_imag = -.25
-subPixelNum = 15
+PML_power_law = 3
+F_min = 1e-16
+α_imag = -.15
+subPixelNum = 2000
 
 ###################################################
 
 
+"""
+∇ =  grad(N, dx)
+
+Gradient with N points, lattice spacing dx.
+
+sparse ∇[N,N+1]
+
+"""
 function grad(N::Int, dx::Float64)
 
     I₁ = collect(1:N)
     J₁ = collect(1:N)
-    V₁ = fill(Complex(-1/dx),N)
+    V₁ = fill(Complex(-1/dx), N)
 
     I₂ = collect(1:N)
     J₂ = collect(2:(N+1))
-    V₂ = fill(Complex(+1/dx),N)
+    V₂ = fill(Complex(+1/dx), N)
 
-    ∇ = sparse([I₁;I₂],[J₁;J₂],[V₁;V₂],N,N+1,+)
+    ∇ = sparse( [I₁;I₂], [J₁;J₂], [V₁;V₂], N, N+1, +)
 
 end # end of function grad
 
 
+
+"""
+∇² =  laplacian(k, inputs)
+
+Laplacian evaluated at k∈ℂ. Lattice size & spacing, bc's determined in inputs.
+
+sparse ∇²[# lattice pts, # lattice pts]
+
+"""
 function laplacian(k::Number, inputs::Dict)
 
     # definitions block#
@@ -49,9 +66,9 @@ function laplacian(k::Number, inputs::Dict)
     ∇ = grad(N-1,dx)
 
     # create PML layer
-    Σ = 1+1im*σ(inputs)/real(k)
-    s₁ = sparse(1:N-1,1:N-1,2./( Σ[1:end-1] + Σ[2:end] ),N-1,N-1)
-    s₂ = sparse(1:N,1:N,1./Σ,N,N)
+    Σ = 1.+1im*σ(inputs)./real(k)
+    s₁ = sparse( 1:N-1, 1:N-1, 2./( Σ[1:end-1] .+ Σ[2:end] ), N-1, N-1)
+    s₂ = sparse( 1:N, 1:N, 1./Σ, N, N)
     ∇² = -s₂*∇.'*s₁*∇
 
     # truncate
@@ -83,6 +100,13 @@ function laplacian(k::Number, inputs::Dict)
 end # end of function laplacian
 
 
+
+"""
+Σ =  σ(inputs)
+
+Conductivity for PML layer.
+
+"""
 function σ(inputs::Dict)
 
     x = inputs["x_ext"]
@@ -117,6 +141,13 @@ function σ(inputs::Dict)
 end # end of function σ
 
 
+
+"""
+region = whichRegion(x, ∂)
+
+Takes vector x, gives vector of regions as defined in input file.
+
+"""
 function whichRegion(x,∂)
 
     region = similar(x,Int);
@@ -141,24 +172,37 @@ function whichRegion(x,∂)
 
     return region
 
-end 
-# end of function whichRegion
+end # end of function whichRegion
 
 
+
+"""
+∫z_dx = trapz(z, dx)
+
+Trapezoidal sum of z.
+
+"""
 function trapz(z,dx::Float64)
 
-    integral = dx*sum(z)-dx*(z[1]+z[end])/2
+    ∫z_dx = dx.*sum(z)-dx*(z[1]+z[end])/2
 
-    return integral
+    return ∫z_dx
 
-end 
-# end of function trapz
+end # end of function trapz
 
 
+
+"""
+δ, ∇δ = dirac_δ(x, x₀)
+
+δ sparse, dirac distribution weighted to be centered at x₀.
+∇δ sparse, derivative of δ.
+
+"""
 function dirac_δ(x,x₀::Float64)
 
-    ind₁ = findmin(abs2(x-x₀))[2]
-    ind₂ = ind₁ + (2*mod(findmin([findmin(abs2(x[ind₁+1]-x₀))[1] findmin(abs2(x[ind₁-1]-x₀))[1]])[2],2)[1] -1)
+    ind₁ = findmin(abs2.(x-x₀))[2]
+    ind₂ = ind₁ + (2*mod(findmin([findmin(abs2.(x[ind₁+1]-x₀))[1] findmin(abs2.(x[ind₁-1]-x₀))[1]])[2],2)[1] -1)
     min_ind = min(ind₁,ind₂)
     max_ind = max(ind₁,ind₂)
 
@@ -176,18 +220,23 @@ function dirac_δ(x,x₀::Float64)
     δ2 = sparsevec([min_ind,max_ind]+1,[w₁,w₂],length(x)+1,+)
     ∇ = grad(length(x),dx)
 
-    ∇δ = ∇*(δ1+δ2)/2
+    ∇δ = ∇*(δ1.+δ2)/2
 
     return δ,∇δ
 
-end 
-# end of function dirac_δ
+end # end of function dirac_δ
 
 
+
+"""
+Θ,∇Θ,∇²Θ = heaviside_Θ(x, x₀)
+
+Θ,∇Θ,∇²Θ not sparse, weighted to be centered at x₀.
+"""
 function heaviside_Θ(x,x₀::Float64)
 
-    ind₁ = findmin(abs2(x-x₀))[2]
-    ind₂ = ind₁ + (2*mod(findmin([findmin(abs2(x[ind₁+1]-x₀))[1] findmin(abs2(x[ind₁-1]-x₀))[1]])[2],2)[1] -1)
+    ind₁ = findmin(abs2.(x-x₀))[2]
+    ind₂ = ind₁ + (2*mod(findmin([findmin(abs2.(x[ind₁+1]-x₀))[1] findmin(abs2.(x[ind₁-1]-x₀))[1]])[2],2)[1] -1)
     min_ind = min(ind₁,ind₂)
     max_ind = max(ind₁,ind₂)
 
@@ -212,11 +261,20 @@ function heaviside_Θ(x,x₀::Float64)
 
     return (Θ,∇Θ,∇²Θ)
 
-end
-# end of function heaviside_Θ
+end # end of function heaviside_Θ
 
 
 
+"""
+ɛ_smoothed, F_smoothed = subpixelSmoothing(inputs; truncate = false, r = [])
+
+Sub-pixel smoothed ɛ & F.
+
+if truncate=true, then output is truncated to bulk region (sans PML)
+
+r is the output of whichRegion. If computing r elsewhere, can save time by using that output here.
+
+"""
 function subpixelSmoothing(inputs; truncate = false, r = [])
     # for now it's for ɛ and F, could feasibly be extended eventually...
     
@@ -259,6 +317,12 @@ function subpixelSmoothing(inputs; truncate = false, r = [])
 end # end of function subpixelSmoothing
 
 
+
+"""
+processInputs(fileName = "./SALT_1d_Inputs.jl")
+
+
+"""
 function processInputs(fileName = "./SALT_1d_Inputs.jl")
 
     (N, k₀, k, bc, ∂, Γ, F, ɛ, γ⟂, D₀, a, b) = evalfile(fileName)
@@ -312,7 +376,7 @@ function processInputs(fileName = "./SALT_1d_Inputs.jl")
     ɛ_ext = [1 ɛ 1]
     Γ_ext = [Inf Γ Inf]
 
-    inputs = Dict{Any,Any}(
+    inputs1 = Dict{String,Any}(
         "ω" => ω,
         "ω₀" => ω₀,
         "k" => k,
@@ -342,13 +406,29 @@ function processInputs(fileName = "./SALT_1d_Inputs.jl")
         "dN" => dN,
         "bc" => bc)
 
-    return(inputs)
+    r_ext = whichRegion(x_ext,∂_ext)
+    ɛ_sm, F_sm = subpixelSmoothing(inputs1; truncate = false, r = [])
+    
+    inputs2 = Dict{String,Any}(
+        "r_ext" => r_ext,
+        "ɛ_sm" => ɛ_sm,
+        "F_sm" => F_sm
+        )
+        
+    return(merge(inputs1,inputs2))
+    
+end  # end of function processInputs
 
-end 
-# end of function processInputs
 
 
 
+
+"""
+inputs = updateInputs(inputs)
+
+If changes were made to the ∂, N, k₀, k, F, ɛ, Γ, bc, a, b, run updateInputs to propagate these changes through the system.
+
+"""
 function updateInputs(inputs::Dict)
 
     ∂ = inputs["∂"]
@@ -412,7 +492,7 @@ function updateInputs(inputs::Dict)
     ɛ_ext = [1 ɛ 1]
     Γ_ext = [Inf Γ Inf]
 
-    inputsNew = Dict{Any,Any}(
+    inputsNew1 = Dict{String,Any}(
         "ω" => ω,
         "ω₀" => ω₀,
         "k" => k,
@@ -442,12 +522,19 @@ function updateInputs(inputs::Dict)
         "dN" => dN,
         "bc" => bc)
 
-    return(inputsNew)
+    r_ext = whichRegion(x_ext,∂_ext)
+    ɛ_sm, F_sm = subpixelSmoothing(inputsNew1; truncate = false, r = [])
+    
+    inputsNew2 = Dict{String,Any}(
+        "r_ext" => r_ext,
+        "ɛ_sm" => ɛ_sm,
+        "F_sm" => F_sm
+        )
+        
+    return(merge(inputsNew1,inputsNew2))
 
-end 
-# end of function updateInputs
+end # end of function updateInputs
 
 #######################################################################
 
-end
-# end of Module Core
+end # end of Module Core

@@ -81,10 +81,10 @@ end
 
 
 
-function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=1., R_min = .01, rank_tol = 1e-8)
+function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
 
-    nevals = nPoles
+    nevals = nKs
 
     ## definitions block
     dx = inputs["dx"]
@@ -96,27 +96,25 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
     x_inds = inputs["x_inds"]
     F_ext = inputs["F_ext"]
     D₀ = inputs["D₀"]
-    ɛ_ext = inputs["ɛ_ext"]
+    ɛ_ext = inputs["ɛ_sm"]
+    F_ext = inputs["F_sm"]
     Γ_ext = inputs["Γ_ext"]
     ##end of definitions block
-
-    r = whichRegion(x_ext,∂_ext)
 
     Γ = zeros(N_ext,1)
     for dd in 2:length(∂_ext)-1
         δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
-        Γ = Γ[:] + full(δ)/Γ_ext[dd]
+        Γ = Γ[:] .+ full(δ)./Γ_ext[dd]
     end
 
-    ∇² = laplacian(k, inputs)
-    ɛ = sparse(1:N_ext, 1:N_ext, ɛ_ext[r], N_ext, N_ext, +)
+    ɛ = sparse(1:N_ext, 1:N_ext, ɛ_ext[:], N_ext, N_ext, +)
     Γ = sparse(1:N_ext, 1:N_ext, Γ[:]    , N_ext, N_ext, +)
 
     function γ(k′)
         return inputs["γ⟂"]/(k′-inputs["k₀"]+1im*inputs["γ⟂"])
     end
 
-    rad(a,b,θ) = b./sqrt(sin(θ).^2+(b/a)^2.*cos(θ).^2)
+    rad(a,b,θ) = b./sqrt.(sin(θ).^2+(b/a)^2.*cos(θ).^2)
     θ = angle(inputs["k₀"]-1im*inputs["γ⟂"]-k)
     flag = abs(inputs["k₀"]-1im*inputs["γ⟂"]-k) < rad(Radii[1],Radii[2],θ)
     
@@ -130,10 +128,12 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
     end
     
     AA = @parallel (+) for i in 1:Nq
-
+        
         k′ = Ω[i]
         k′² = k′^2
 
+        ∇² = laplacian(k′, inputs)
+        
         if (i > 1) & (i < Nq)
             dk′ = (Ω[i+1]-Ω[i-1]  )/2
         elseif i == Nq
@@ -142,7 +142,7 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
             dk′ = (Ω[2]  -Ω[end]  )/2
         end
 
-        χk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(k′)*F.*F_ext[r]*k′², N_ext, N_ext, +)
+        χk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(k′)*F[:].*F_ext[:]*k′², N_ext, N_ext, +)
 
         A  = (∇²+(ɛ+Γ)*k′²+χk′²)\M
         A₀ = A*dk′/(2π*1im)
@@ -158,7 +158,7 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
             elseif i == 1
                 dkk′ = (ΩΩ[2]  -ΩΩ[end]  )/2
             end
-            χkk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(kk′)*F.*F_ext[r]*kk′², N_ext, N_ext, +)
+            χkk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(kk′)*F[:].*F_ext[:]*kk′², N_ext, N_ext, +)
             
             AA  = (∇²+(ɛ+Γ)*kk′²+χkk′²)\M
             AA₀ = AA*dkk′/(2π*1im)
@@ -191,24 +191,64 @@ function computePolesNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Rea
     return D
 
 end 
-# end of function computePolesNL2_parallel
+# end of function computeK_NL2_parallel
 
 
-function computeZerosNL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
+
+
+function computePole_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=[1.], R_min = .01, rank_tol = 1e-8)
     
-    inputs1 = deepcopy(inputs)
+    inputs = deepcopy(inputs1)
+    inputs["bc"] = ["out" "out"]
+    inputs = updateInputs(inputs)
+        
+    k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nKs=nPoles, F=F, R_min=R_min, rank_tol = rank_tol)
     
-    inputs1["ɛ_ext"] = conj(inputs1["ɛ_ext"])
-    inputs1["Γ_ext"] = conj(inputs["Γ_ext"])
-    inputs1["γ⟂"] = -inputs["γ⟂"]
-    inputs1["D₀"] = -inputs["D₀"]
-    
-    k = computePolesNL2_parallel(inputs1, conj(k), Radii; Nq=Nq, nPoles=nZeros, F=F, R_min=R_min, rank_tol = rank_tol)
-    
-    return conj(k)
+    return k
     
 end
 # end of function computeZerosNL2_parallel
+
+
+
+
+function computeZero_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=[1.], R_min = .01, rank_tol = 1e-8)
+    
+    inputs = deepcopy(inputs1)
+    inputs["bc"] = ["in" "in"]
+    inputs = updateInputs(inputs)
+    
+    k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nKs=nZeros, F=F, R_min=R_min, rank_tol = rank_tol)
+    
+    return k
+    
+end
+# end of function computeZero_NL2_parallel
+
+
+
+
+function computeUZR_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direction = "R", Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
+    # With Line Pulling, using contour integration
+    
+    # set outgoing boundary conditions, using PML implementation
+    inputs = deepcopy(inputs1)
+    if direction in ["R" "r" "right" "Right" "->" ">" "=>"] 
+        inputs["bc"] = ["in" "out"]
+    elseif direction in ["L" "l" "left" "Left" "<-" "<" "<="] 
+        inputs["bc"] = ["out" "in"]
+    else
+        println("error. invalid direction")
+        return
+    end
+    inputs = updateInputs(inputs)
+    
+    k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nKs=nZeros, F=F, R_min = R_min, rank_tol = rank_tol)
+
+    return k
+
+end 
+# end of function computeUZR_NL2_parallel
 
 
 

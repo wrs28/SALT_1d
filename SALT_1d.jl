@@ -1,6 +1,7 @@
 module SALT_1d
 
-export processInputs, updateInputs, computePolesL, computeZerosL, computeCFs, computeULRs, computeKsNL1, computeKsNL2,  computePolesNL1, computePolesNL2, computeZerosNL1, computeZerosNL2, solve_SPA, solve_scattered, solve_single_mode_lasing, solve_CPA, computeS, solve_CPA
+export processInputs, updateInputs, computeCF, computePole_L, computeZero_L, computeUZR_L, computeK_NL1, computePole_NL1, computeZero_NL1, computeUZR_NL1, computeK_NL2, computePole_NL2, computeZero_NL2, computeUZR_NL2
+#solve_SPA, solve_scattered, solve_single_mode_lasing, solve_CPA, computeS, solve_CPA,
 # bootstrap
 
 include("SALT_1d_Core.jl")
@@ -13,12 +14,86 @@ using Formatting
 ####################################################################################
 
 
+"""
+η,u =  computeCF(inputs, k, nCFs; F=1., η_init = [], u_init = [])
 
-function computePolesL(inputs::Dict, k::Number, nPoles::Int; F=1., truncate = false, ψ_init = []) 
-    # No Line Pulling. Set D or F to zero to get transparent cavity. Uses purely outgoing PMLs
+Compute CF states w/o line pulling. Uses bc's specified in inputs file.
+
+η[ # of CF states]
+
+u[ cavity size, # of CF states]
+
+"""
+function computeCF(inputs::Dict, k::Number, nCFs::Int; F=1., η_init = [], u_init = [])
+    
+    ## DEFINITIONS BLOCK ##
+    N_ext = inputs["N_ext"]
+    dx = inputs["dx"]
+    x_ext = inputs["x_ext"]
+    x_inds = inputs["x_inds"]
+    ∂_ext = inputs["∂_ext"]
+    ɛ_ext = inputs["ɛ_sm"]
+    F_ext = inputs["F_sm"]
+    Γ_ext = inputs["Γ_ext"]
+    Γ = zeros(N_ext,1)
+    for dd in 3:length(∂_ext)-2
+        δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
+        Γ = Γ[:] .+ full(δ)./Γ_ext[dd]
+    end
+    k²= k^2
+    ##
+    
+    if isempty(size(F))
+        F = [F]
+    end
+
+    ∇² = laplacian(k, inputs)
+    
+    ɛk² = sparse( 1:N_ext, 1:N_ext, ɛ_ext[:].*k²      , N_ext, N_ext, +)
+    Γk² = sparse( 1:N_ext, 1:N_ext, Γ[:].*k²          , N_ext, N_ext, +)
+    sF  = sparse( 1:N_ext, 1:N_ext, sign.(F.*F_ext[:]), N_ext, N_ext, +)
+    FF  = sparse( 1:N_ext, 1:N_ext, abs.(F.*F_ext[:]) , N_ext, N_ext, +)
+
+    ## eigenvalue solve
+    if isempty(η_init) & isempty(u_init)
+        (η,u_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇².+ɛk².+Γk²)./k²,FF, which = :LM, nev = nCFs, sigma = 1e-8)
+    elseif !isempty(η_init) & isempty(u_init)
+        (η,u_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇².+ɛk².+Γk²)./k²,FF, which = :LM, nev = nCFs, sigma = η_init)
+    elseif !isempty(η_init) & !isempty(u_init)
+        (η,u_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇².+ɛk².+Γk²)./k²,FF, which = :LM, nev = nCFs, sigma = η_init, v0 = u_init)
+    end
+
+    u = zeros(Complex128,length(inputs["x_ext"]),nCFs)
+
+    ## normalization
+    for ii = 1:length(η)
+        N = trapz(u_ext[:,ii].*F[:].*F_ext[:].*u_ext[:,ii],dx)
+        u[:,ii] = u_ext[:,ii]./sqrt.(N)
+    end
+    
+    return η,u
+
+end # end of function computeCFs
+
+
+
+
+"""
+k,ψ =  computePole_L(inputs, k, nPoles; F=1, truncate = false, ψ_init = [])
+
+Compute poles w/o line pulling, using purely outoing PML's.
+
+Set D or F to zero to get passive cavity.
+
+k[ # of poles]
+
+ψ[ cavity size, # of poles]
+
+"""
+function computePole_L(inputs1::Dict, k::Number, nPoles::Int; F=1., truncate = false, ψ_init = []) 
 
     # set outgoing boundary conditions, using PML implementation
-    inputs = deepcopy(inputs)
+    inputs = deepcopy(inputs1)
     inputs["bc"] = ["pml_out" "pml_out"]
     inputs = updateInputs(inputs)
     
@@ -29,18 +104,28 @@ function computePolesL(inputs::Dict, k::Number, nPoles::Int; F=1., truncate = fa
     x_ext = inputs["x_ext"]
     x_inds = inputs["x_inds"]
     ∂_ext = inputs["∂_ext"]
-    ɛ_ext, F_ext = subpixelSmoothing(inputs)
+    ɛ_ext = inputs["ɛ_sm"]
+    F_ext = inputs["F_sm"]
     Γ_ext = inputs["Γ_ext"]
     Γ = zeros(N_ext,1)
     for dd in 3:length(∂_ext)-2
         δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
-        Γ = Γ[:] + full(δ)/Γ_ext[dd]
+        Γ = Γ[:] .+ full(δ)./Γ_ext[dd]
     end
     ## END OF DEFINITIONS BLOCK ##
     
+    if isempty(size(F))
+        F = [F]
+    end
+    if length(F)==1
+        r1 = 1
+    else
+        r1 = inputs["x_inds"]
+    end
+    
     ∇² = laplacian(k, inputs)
 
-    ɛΓ⁻¹ = sparse(1:N_ext, 1:N_ext, 1./(ɛ_ext[:]+Γ[:]-1im*D₀.*F.*F_ext[:]), N_ext, N_ext, +)
+    ɛΓ⁻¹ = sparse( 1:N_ext, 1:N_ext, 1./(ɛ_ext[:].+Γ[:].-1im.*D₀.*F[:].*F_ext[:]), N_ext, N_ext, +)
 
     if isempty(ψ_init)
         (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nPoles, sigma = k^2+1.e-5)
@@ -50,32 +135,45 @@ function computePolesL(inputs::Dict, k::Number, nPoles::Int; F=1., truncate = fa
         
     ψ = zeros(Complex128,length(inputs["x_ext"]),nPoles)
 
-    inds1 = inputs["x_inds"][1]:inputs["x_inds"][end]
-    r1 = whichRegion(inputs["x"],inputs["∂"])
-    if length(F)>1
-        F_temp = F[r1]
-    else
-        F_temp = F
+    r = inputs["x_inds"]
+    for ii = 1:nPoles
+        N = trapz( (ɛ_ext[r] .+ Γ[r] .- 1im.*D₀.*F_ext[r].*F[r1]) .*abs2.(ψ_ext[r,ii]),dx)
+        ψ[:,ii] = ψ_ext[:,ii]./sqrt.(N)
     end
-    for ii = 1:length(k²)
-        N = trapz((inputs["ɛ"][r1]+Γ[inds1]-1im*D₀.*F_temp.*inputs["F"][r1]).*abs2(ψ_ext[inds1,ii]),dx)
-        ψ_ext[:,ii] = ψ_ext[:,ii]/sqrt(N)
-        ψ[:,ii] = ψ_ext[:,ii]
-    end
+
+#    ɛ_ext[r] .+ Γ[r] .- 1im.*D₀.*F_ext[r].*F[:].*abs2.(ψ_ext[r,ii])
+#    inds1 = inputs["x_inds"][1]:inputs["x_inds"][end]
+#    r1 = whichRegion(inputs["x"],inputs["∂"])
+#    if length(F)>1
+#        F_temp = F[r1]
+#    else
+#        F_temp = F
+#    end
 
     if truncate
-        return sqrt(k²),ψ[inputs["x_inds"],:]
+        return sqrt.(k²), ψ[inputs["x_inds"],:]
     else
-        return sqrt(k²),ψ
+        return sqrt.(k²), ψ
     end
 
-end 
-# end of function computePolesL
+end # end of function computePole_L
 
 
 
-function computeZerosL(inputs::Dict, k::Number, nZeros::Int; F=1., truncate = false, ψ_init = [])
-    # No Line Pulling. Set D or F to zero to get transparent cavity. Uses purely incoming PMLs.
+
+"""
+k,ψ =  computeZero_L(inputs, k, nZeros; F=1, truncate = false, ψ_init = [])
+
+Compute zeros w/o line pulling, using purely incoming PML's.
+
+Set D or F to zero to get passive cavity.
+
+k[ # of poles]
+
+ψ[ cavity size, # of zeros]
+
+"""
+function computeZero_L(inputs::Dict, k::Number, nZeros::Int; F=1., truncate = false, ψ_init = [])
     
     inputs1 = deepcopy(inputs)
     
@@ -84,76 +182,37 @@ function computeZerosL(inputs::Dict, k::Number, nZeros::Int; F=1., truncate = fa
     inputs1["γ⟂"] = -inputs["γ⟂"]
     inputs1["D₀"] = -inputs["D₀"]
     
-    kz,ψz = computePolesL(inputs1, conj(k), nZeros; F=F, truncate = truncate, ψ_init = conj(ψ_init) )
+    kz,ψz = computePole_L(inputs1, conj(k), nZeros; F=F, truncate = truncate, ψ_init = conj(ψ_init) )
     
     return conj(kz),conj(ψz)
 
-end 
-# end of function computeZerosL
-
-
-
-
-function computeCFs(inputs::Dict, k::Number, nCFs::Int; F=1., η_init = [], u_init = [])
-    # No Line Pulling, calculation independent of pump D. Uses w/e bc's are specified in input file.
-
-    ## definitions block
-    N_ext = inputs["N_ext"]
-    dx = inputs["dx"]
-    x_ext = inputs["x_ext"]
-    x_inds = inputs["x_inds"]
-    ∂_ext = inputs["∂_ext"]
-    ɛ_ext, F_ext = subpixelSmoothing(inputs)
-    Γ_ext = inputs["Γ_ext"]
-    Γ = zeros(N_ext,1)
-    for dd in 3:length(∂_ext)-2
-        δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
-        Γ = Γ[:] + full(δ)/Γ_ext[dd]
-    end
-    k²= k^2
-
-    ∇² = laplacian(k, inputs)
-    
-    ɛk² = sparse(1:N_ext, 1:N_ext, ɛ_ext[:]*k²      , N_ext, N_ext, +)
-    Γk² = sparse(1:N_ext, 1:N_ext, Γ[:]*k²          , N_ext, N_ext, +)
-    sF  = sparse(1:N_ext, 1:N_ext, sign(F.*F_ext[:]), N_ext, N_ext, +)
-    FF  = sparse(1:N_ext, 1:N_ext, abs(F.*F_ext[:]) , N_ext, N_ext, +)
-
-    if isempty(η_init) & isempty(u_init)
-        (η,u_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²+Γk²)/k²,FF, which = :LM, nev = nCFs, sigma = 1e-8)
-    elseif !isempty(η_init) & isempty(u_init)
-        (η,u_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²+Γk²)/k²,FF, which = :LM, nev = nCFs, sigma = η_init)
-    elseif !isempty(η_init) & !isempty(u_init)
-        (η,u_ext,nconv,niter,nmult,resid) = eigs(-sF*(∇²+ɛk²+Γk²)/k²,FF, which = :LM, nev = nCFs, sigma = η_init, v0 = u_init)
-    end
-
-    u = zeros(Complex128,length(inputs["x_ext"]),nCFs)
-
-    # normalization block
-    for ii = 1:length(η)
-        N = trapz(u_ext[:,ii].*F.*F_ext[:].*u_ext[:,ii],dx)
-        u_ext[:,ii] = u_ext[:,ii]/sqrt(N)
-        u[:,ii] = u_ext[:,ii]
-    end
-
-    return η,u
-
-end 
-# end of function computeCFs
+end # end of function computeZero_L
 
 
 
 
 
-function computeULRs(inputs::Dict, k::Number, nFreqs::Int; F=1., direction = "R", truncate = false, ψ_init = []) 
-    # No Dispersion. Set D or F to zero to get transparent cavity. Uses purely outgoing PMLs
+"""
+k,ψ =  computeUZR_L(inputs, k, nFreqs; F=1., direction = "R", truncate = false, ψ_init = [])
+
+Compute UZR (unidirectional zero reflection) states w/o line pulling. Sets bc's to incident PML on left and outgoing on right if DIRECTION = "R", and vice versa if "L"
+
+k[ # of Freqs]
+
+ψ[ cavity size, # of Freqs]
+
+"""
+function computeUZR_L(inputs1::Dict, k::Number, nFreqs::Int; F=1., direction = "R", truncate = false, ψ_init = []) 
 
     # set outgoing boundary conditions, using PML implementation
-    inputs = deepcopy(inputs)
-    if direction == "R"
+    inputs = deepcopy(inputs1)
+    if direction in ["R" "r" "right" "Right" "->" ">" "=>"] 
         inputs["bc"] = ["pml_in" "pml_out"]
-    elseif direction == "L"
+    elseif direction in ["L" "l" "left" "Left" "<-" "<" "<="] 
         inputs["bc"] = ["pml_out" "pml_in"]
+    else
+        println("error. invalid direction")
+        return
     end
     inputs = updateInputs(inputs)
     
@@ -164,53 +223,65 @@ function computeULRs(inputs::Dict, k::Number, nFreqs::Int; F=1., direction = "R"
     x_ext = inputs["x_ext"]
     x_inds = inputs["x_inds"]
     ∂_ext = inputs["∂_ext"]
-    ɛ_ext, F_ext = subpixelSmoothing(inputs)
+    ɛ_ext = inputs["ɛ_sm"]
+    F_ext = inputs["F_sm"]
     Γ_ext = inputs["Γ_ext"]
     ## END OF DEFINITIONS BLOCK ##
 
+    if isempty(size(F))
+        F = [F]
+    end
+    if length(F)==1
+        r1 = 1
+    else
+        r1 = inputs["x_inds"]
+    end
+    
     Γ = zeros(N_ext,1)
     for dd in 3:length(∂_ext)-2
         δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
-        Γ = Γ[:] + full(δ)/Γ_ext[dd]
+        Γ = Γ[:] .+ full(δ)./Γ_ext[dd]
     end
-    ɛΓ⁻¹ = sparse(1:N_ext, 1:N_ext, 1./(ɛ_ext[:]+Γ[:]-1im*D₀.*F.*F_ext[:]), N_ext, N_ext, +)
+    ɛΓ⁻¹ = sparse( 1:N_ext, 1:N_ext, 1./(ɛ_ext[:].+Γ[:].-1im*D₀.*F[:].*F_ext[:]), N_ext, N_ext, +)
     
     ∇² = laplacian(k, inputs)
 
     if isempty(ψ_init)
-        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nFreqs, sigma = k^2+1.e-5)
+        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nFreqs, sigma = k^2+1.e-6)
     else
-        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nFreqs, sigma = k^2+1.e-5, v0 = ψ_init)
+        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nFreqs, sigma = k^2+1.e-6, v0 = ψ_init)
     end
         
     ψ = zeros(Complex128,length(inputs["x_ext"]),nFreqs)
 
-    inds1 = inputs["x_inds"][1]:inputs["x_inds"][end]
-    r1 = whichRegion(inputs["x"],inputs["∂"])
-    if length(F)>1
-        F_temp = F[r1]
-    else
-        F_temp = F
-    end
-    for ii = 1:length(k²)
-        N = trapz((inputs["ɛ"][r1]+Γ[inds1]-1im*D₀.*F_temp.*inputs["F"][r1]).*abs2(ψ_ext[inds1,ii]),dx)
-        ψ_ext[:,ii] = ψ_ext[:,ii]/sqrt(N)
-        ψ[:,ii] = ψ_ext[:,ii]
+    r = inputs["x_inds"]
+    for ii = 1:nFreqs
+        N = trapz( (ɛ_ext[r] .+ Γ[r] .- 1im.*D₀.*F_ext[r].*F[r1]) .*abs2.(ψ_ext[r,ii]),dx)
+        ψ[:,ii] = ψ_ext[:,ii]./sqrt.(N)
     end
 
     if truncate
-        return sqrt(k²),ψ[inputs["x_inds"],:]
+        return sqrt.(k²),ψ[inputs["x_inds"],:]
     else
-        return sqrt(k²),ψ
+        return sqrt.(k²),ψ
     end
 
-end
-# end of function computeULRs
+end   # end of function computeUZR_L
 
 
 
 
-function computeKsNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .5, max_count = 15, max_iter = 50)
+"""
+k,ψ =  computeK_NL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .5, max_count = 15, max_iter = 50)
+
+Compute K's at S-matrix evec specified in input file, with line-pulling, using CF method. 
+
+k::Complex128
+
+ψ[cavity size]
+
+"""
+function computeK_NL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .5, max_count = 15, max_iter = 50)
     # With Line Pulling. Nonlinear solve using TCF evecs and evals
     # max_count: the max number of TCF states to compute
     # max_iter: maximum number of iterations to include in nonlinear solve
@@ -223,7 +294,8 @@ function computeKsNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_in
     γ⟂ = inputs["γ⟂"]
     k₀ = inputs["k₀"]
     dx = inputs["dx"]
-    ɛ_ext, F_ext = subpixelSmoothing(inputs)
+    ɛ_ext = inputs["ɛ_sm"]
+    F_ext = inputs["F_sm"]
     ##
     
     function γ(k)
@@ -232,7 +304,7 @@ function computeKsNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_in
     
     u = NaN*ones(Complex128,inputs["N_ext"],1)
     η_init = [η_init]
-    η_init[:,1],u[:,1] = computeCFs(inputs, k_init, 1; η_init=η_init[1], u_init = u_init, F=F)
+    η_init[:,1],u[:,1] = computeCF(inputs, k_init, 1; η_init=η_init[1], u_init = u_init, F=F)
     
     function f!(z, fvec)
 
@@ -244,7 +316,7 @@ function computeKsNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_in
         ind = Int
         while flag
             
-            η_temp,u_temp = computeCFs(inputs, k, M; η_init=η_init[1], u_init = u[:,1], F=F)
+            η_temp,u_temp = computeCF(inputs, k, M; η_init=η_init[1], u_init = u[:,1], F=F)
             overlap = zeros(Float64,M)
             
             for i in 1:M
@@ -282,17 +354,27 @@ function computeKsNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_in
     conv = converged(z)
     
     η_init[1] = inputs["D₀"]*γ(k)
-    η,u[:,1] = computeCFs(inputs, k, 1; η_init=η_init[1], F=F)
+    η,u[:,1] = computeCF(inputs, k, 1; η_init=η_init[1], F=F)
     
     return k,u[:,1],η[1],conv
 
 end
-# end of function computeKsNL1
+# end of function computeK_NL1
 
 
 
 
-function computePolesNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .5, max_count = 15, max_iter = 50)
+"""
+k,ψ =  computePole_NL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .5, max_count = 15, max_iter = 50)
+
+Compute pole, with line-pulling, using CF method. 
+
+k::Complex128
+
+ψ[cavity size]
+
+"""
+function computePole_NL1(inputs1::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .5, max_count = 15, max_iter = 50)
     # With Line Pulling. Nonlinear solve using TCF evecs and evals
     # max_count: the max number of TCF states to compute
     # max_iter: maximum number of iterations to include in nonlinear solve
@@ -300,38 +382,108 @@ function computePolesNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η
     # uses outgoing PML implementation
     
     # set outgoing boundary conditions, using PML implementation
-    inputs = deepcopy(inputs)
-    inputs["bc"] = ["pml_out" "pml_out"]
+    inputs = deepcopy(inputs1)
+    inputs["bc"] = ["out" "out"]
     inputs = updateInputs(inputs)
     
-    k,u,η,conv = computeKsNL1(inputs, k_init; F=F, dispOpt = dispOpt, η_init = η_init, u_init = u_init, k_avoid = k_avoid, tol = tol, max_count = max_count, max_iter = max_iter)
+    k,u,η,conv = computeK_NL1(inputs, k_init; F=F, dispOpt = dispOpt, η_init = η_init, u_init = u_init, k_avoid = k_avoid, tol = tol, max_count = max_count, max_iter = max_iter)
     
     return k,u,η,conv
 
 end
-# end of function computePolesNL1
+# end of function computePole_NL1
 
 
 
-function computeZerosNL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, β_init = 1e-13+0.0im, v_init = [], k_avoid = [0.], tol = .5, max_count = 15, max_iter = 50)
+
+"""
+k,ψ =  computeZero_NL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .5, max_count = 15, max_iter = 50)
+
+Compute zero, with line-pulling, using CF method. 
+
+k::Complex128
+
+ψ[cavity size]
+
+F should be an array either of length N_ext or of length 1.
+
+"""
+function computeZero_NL1(inputs1::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [0.], tol = .5, max_count = 15, max_iter = 50)
     # With Line Pulling. Nonlinear solve using TCF evecs and evals
+    # max_count: the max number of TCF states to compute
+    # max_iter: maximum number of iterations to include in nonlinear solve
+    # η: should be a number, not an array (even a singleton array)
+    # uses outgoing PML implementation
     
     # set outgoing boundary conditions, using PML implementation
-    inputs = deepcopy(inputs)
-    inputs["bc"] = ["pml_in" "pml_in"]
+    inputs = deepcopy(inputs1)
+    inputs["bc"] = ["in" "in"]
     inputs = updateInputs(inputs)
     
-    k,u,η,conv = computeKsNL1(inputs, k_init; F=F, dispOpt = dispOpt, η_init = η_init, u_init = u_init, k_avoid = k_avoid, tol = tol, max_count = max_count, max_iter = max_iter)
+    k,u,η,conv = computeK_NL1(inputs, k_init; F=F, dispOpt = dispOpt, η_init = η_init, u_init = u_init, k_avoid = k_avoid, tol = tol, max_count = max_count, max_iter = max_iter)
     
     return k,u,η,conv
     
 end
-# end of function computeZerosNL1
+# end of function computeZero_NL1
 
 
 
 
-function computeKsNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=1., R_min = .01, rank_tol = 1e-8)
+"""
+k,ψ =  computeUZR_NL1(inputs::Dict, k_init::Number; F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .5, max_count = 15, max_iter = 50)
+
+Compute pole, with line-pulling, using CF method. 
+
+k::Complex128
+
+ψ[cavity size]
+
+"""
+function computeUZR_NL1(inputs1::Dict, k_init::Number; direction = "R", F=1., dispOpt = false, η_init = 1e-13+0.0im, u_init = [], k_avoid = [.0], tol = .5, max_count = 15, max_iter = 50)
+    # With Line Pulling. Nonlinear solve using TCF evecs and evals
+    # max_count: the max number of TCF states to compute
+    # max_iter: maximum number of iterations to include in nonlinear solve
+    # η: should be a number, not an array (even a singleton array)
+    # uses outgoing PML implementation
+    
+    
+    # set outgoing boundary conditions, using PML implementation
+    inputs = deepcopy(inputs1)
+    if direction in ["R" "r" "right" "Right" "->" ">" "=>"] 
+        inputs["bc"] = ["in" "out"]
+    elseif direction in ["L" "l" "left" "Left" "<-" "<" "<="] 
+        inputs["bc"] = ["out" "in"]
+    else
+        println("error. invalid direction")
+        return
+    end
+    inputs = updateInputs(inputs)
+    
+    k,u,η,conv = computeK_NL1(inputs, k_init; F=F, dispOpt = dispOpt, η_init = η_init, u_init = u_init, k_avoid = k_avoid, tol = tol, max_count = max_count, max_iter = max_iter)
+    
+    return k,u,η,conv
+
+end
+# end of function computeUZR_NL1
+
+
+
+
+
+"""
+k =  computeK_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
+
+Compute K's at S-matrix evec specified in input file, with line-pulling, using contour method. 
+
+Inputs: k is centroid of contour
+Radii = (real radius, imag radius) are the semi-diameters of the contour
+Nq are the number of quadrature points.
+nKs is an upper-limit on the number of frequencies expected inside the contour.
+R_min is the radius of subtracted contour if the atomic point is contained inside the contour
+
+"""
+function computeK_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
 
        
@@ -341,17 +493,22 @@ function computeKsNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, 
     N_ext = inputs["N_ext"]
     dx = inputs["dx"]
     x_ext = inputs["x_ext"]
-        x_inds = inputs["x_inds"]
+    x_inds = inputs["x_inds"]
     ∂_ext = inputs["∂_ext"]
+    ɛ_ext = inputs["ɛ_sm"]
+    F_ext = inputs["F_sm"]
     Γ_ext = inputs["Γ_ext"]
     Γ = zeros(N_ext,1)
     for dd in 3:length(∂_ext)-2
         δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
-        Γ = Γ[:] + full(δ)/Γ_ext[dd]
+        Γ = Γ[:] .+ full(δ)./Γ_ext[dd]
     end
-    ɛ_ext, F_ext = subpixelSmoothing(inputs)
     ## end of definitions block
 
+    if isempty(size(F))
+        F = [F]
+    end
+    
     ɛ = sparse(1:N_ext, 1:N_ext, ɛ_ext[:], N_ext, N_ext, +)
     Γ = sparse(1:N_ext, 1:N_ext, Γ[:]    , N_ext, N_ext, +)
 
@@ -393,7 +550,7 @@ function computeKsNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, 
         end
 
         ∇² = laplacian(k′, inputs)
-        χk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(k′)*F.*F_ext[:]*k′², N_ext, N_ext, +)
+        χk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(k′)*F[:].*F_ext[:]*k′², N_ext, N_ext, +)
 
         A = (∇²+(ɛ+Γ)*k′²+χk′²)\M
         A₀ += A*dk′/(2π*1im)
@@ -409,7 +566,7 @@ function computeKsNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, 
             elseif i == 1
                 dkk′ = (ΩΩ[2]  -ΩΩ[end]  )/2
             end
-            χkk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(kk′)*F.*F_ext[:]*kk′², N_ext, N_ext, +)
+            χkk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(kk′)*F[:].*F_ext[:]*kk′², N_ext, N_ext, +)
             
             AA = (∇²+(ɛ+Γ)*kk′²+χkk′²)\M
             AA₀ += AA*dkk′/(2π*1im)
@@ -440,43 +597,103 @@ function computeKsNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, 
     return D
 
 end 
-# end of function computeKsNL2
+# end of function computeK_NL2
 
 
 
 
-function computePolesNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=1., R_min = .01, rank_tol = 1e-8)
+"""
+k =  computePole_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
+
+Compute poles, with line-pulling, using contour method. 
+
+Inputs: k is centroid of contour
+Radii = (real radius, imag radius) are the semi-diameters of the contour
+Nq are the number of quadrature points.
+nPoles is an upper-limit on the number of frequencies expected inside the contour.
+R_min is the radius of subtracted contour if the atomic point is contained inside the contour
+
+"""
+function computePole_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
 
     # set outgoing boundary conditions, using exact implementation
-    inputs = deepcopy(inputs)
+    inputs = deepcopy(inputs1)
     inputs["bc"] = ["out" "out"]
     inputs = updateInputs(inputs)
     
-    k = computeKsNL2(inputs, k, Radii; Nq=Nq, nKs=nPoles, F=F, R_min = R_min, rank_tol = rank_tol)
+    k = computeK_NL2(inputs, k, Radii; Nq=Nq, nKs=nPoles, F=F, R_min = R_min, rank_tol = rank_tol)
 
     return k
 
 end 
-# end of function computePolesNL2
+# end of function computePole_NL2
 
 
 
+"""
+k =  computeZero_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
 
-function computeZerosNL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
+Compute zeros, with line-pulling, using contour method. 
+
+Inputs: k is centroid of contour
+Radii = (real radius, imag radius) are the semi-diameters of the contour
+Nq are the number of quadrature points.
+nZeros is an upper-limit on the number of frequencies expected inside the contour.
+R_min is the radius of subtracted contour if the atomic point is contained inside the contour
+
+"""
+function computeZero_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
     
     # set outgoing boundary conditions, using exact implementation
-    inputs = deepcopy(inputs)
+    inputs = deepcopy(inputs1)
     inputs["bc"] = ["in" "in"]
     inputs = updateInputs(inputs)
     
-    k = computeKsNL2(inputs, k, Radii; Nq=Nq, nKs=nZeros, F=F, R_min = R_min, rank_tol = rank_tol)
+    k = computeK_NL2(inputs, k, Radii; Nq=Nq, nKs=nZeros, F=F, R_min = R_min, rank_tol = rank_tol)
 
     return k
 
 end 
-# end of function computeZerosNL2
+# end of function computeZero_NL2
+
+
+
+
+"""
+k =  computeUZR_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
+
+Compute UZR, with line-pulling, using contour method. 
+
+Inputs: k is centroid of contour
+Radii = (real radius, imag radius) are the semi-diameters of the contour
+Nq are the number of quadrature points.
+nZeros is an upper-limit on the number of frequencies expected inside the contour.
+R_min is the radius of subtracted contour if the atomic point is contained inside the contour
+
+"""
+function computeUZR_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direction = "R", Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
+    # With Line Pulling, using contour integration
+    
+    # set outgoing boundary conditions, using PML implementation
+    inputs = deepcopy(inputs1)
+    if direction in ["R" "r" "right" "Right" "->" ">" "=>"] 
+        inputs["bc"] = ["in" "out"]
+    elseif direction in ["L" "l" "left" "Left" "<-" "<" "<="] 
+        inputs["bc"] = ["out" "in"]
+    else
+        println("error. invalid direction")
+        return
+    end
+    inputs = updateInputs(inputs)
+    
+    k = computeK_NL2(inputs, k, Radii; Nq=Nq, nKs=nZeros, F=F, R_min = R_min, rank_tol = rank_tol)
+
+    return k
+
+end 
+# end of function computeUZR_NL2
 
 
 
@@ -540,27 +757,27 @@ function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, 
 
 
     function χ(Ψ)
-        V = D₀*(F.*F_ext[:]).*γ(k)./(1+abs2(γ(k)*Ψ))
+        V = D₀*(F.*F_ext[:]).*γ(k)./(1+abs2.(γ(k)*Ψ))
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χʳʳ′(Ψ)
-        V = -2.*abs2(γ(k)).*(F.*F_ext[:]).*real(γ(k).*Ψ).*D₀.*real(Ψ)./((1+abs2(γ(k)*Ψ)).^2)
+        V = -2.*abs2.(γ(k)).*(F.*F_ext[:]).*real(γ(k).*Ψ).*D₀.*real(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χⁱʳ′(Ψ)
-        V = -2.*abs2(γ(k)).*(F.*F_ext[:]).*imag(γ(k).*Ψ).*D₀.*real(Ψ)./((1+abs2(γ(k)*Ψ)).^2)
+        V = -2.*abs2.(γ(k)).*(F.*F_ext[:]).*imag(γ(k).*Ψ).*D₀.*real(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χʳⁱ′(Ψ)
-        V = -2.*abs2(γ(k)).*(F.*F_ext[:]).*real(γ(k).*Ψ).*D₀.*imag(Ψ)./((1+abs2(γ(k)*Ψ)).^2)
+        V = -2.*abs2.(γ(k)).*(F.*F_ext[:]).*real(γ(k).*Ψ).*D₀.*imag(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χⁱⁱ′(Ψ)
-        V = -2.*abs2(γ(k)).*(F.*F_ext[:]).*imag(γ(k).*Ψ).*D₀.*imag(Ψ)./((1+abs2(γ(k)*Ψ)).^2)
+        V = -2.*abs2.(γ(k)).*(F.*F_ext[:]).*imag(γ(k).*Ψ).*D₀.*imag(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
@@ -692,10 +909,10 @@ function computeS(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispO
                 end
 
                 inputs["a"] = [1.0,0.0]
-                ψ₊ = solve_scattered(inputs,k,isNonLinear = false, F = F./(1+abs2(γ(k)*ψ)))
+                ψ₊ = solve_scattered(inputs,k,isNonLinear = false, F = F./(1+abs2.(γ(k)*ψ)))
 
                 inputs["a"] = [0.0,1.0]
-                ψ₋ = solve_scattered(inputs,k,isNonLinear = false, F = F./(1+abs2(γ(k)*ψ)))
+                ψ₋ = solve_scattered(inputs,k,isNonLinear = false, F = F./(1+abs2.(γ(k)*ψ)))
 
                 S[1,1,ii,j] = ψ₊[x_inds[1]]*exp(+1im*inputs["dx"]*k)
                 S[2,1,ii,j] = ψ₊[x_inds[end]]
@@ -720,10 +937,10 @@ function computeS(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispO
             end
 
             inputs["a"] = [1.0,0.0]
-            ψ₊ = solve_scattered(inputs,k,isNonLinear = false, F = F./(1+abs2(γ(k)*ψ)))
+            ψ₊ = solve_scattered(inputs,k,isNonLinear = false, F = F./(1+abs2.(γ(k)*ψ)))
 
             inputs["a"] = [0.0,1.0]
-            ψ₋ = solve_scattered(inputs,k,isNonLinear = false, F = F./(1+abs2(γ(k)*ψ)))
+            ψ₋ = solve_scattered(inputs,k,isNonLinear = false, F = F./(1+abs2.(γ(k)*ψ)))
 
             S[1,1,ii,1] = ψ₊[x_inds[1]]*exp(+1im*inputs["dx"]*k)
             S[2,1,ii,1] = ψ₊[x_inds[end]]
@@ -786,7 +1003,7 @@ function solve_SPA(inputs::Dict, ω; z₀₊=0.001im, z₀₋=0.001im, F = 1., u
         Z = z[1]+1im*z[2]
 
         numerator = u.*(F.*F_ext).*(Z*u+b*φ₊)
-        denominator = 1+abs2(γ())*abs2(Z*u+b*φ₊)
+        denominator = 1+abs2.(γ())*abs2.(Z*u+b*φ₊)
         term = (D₀*γ()./η).*trapz(numerator./denominator,dx)
 
         fvec[1] = real(term[1]/Z - 1)
@@ -802,7 +1019,7 @@ function solve_SPA(inputs::Dict, ω; z₀₊=0.001im, z₀₋=0.001im, F = 1., u
         Z = z[1]+1im*z[2]
 
         numerator = u.*(F.*F_ext).*(Z*u+b*φ₋)
-        denominator = 1+abs2(γ())*abs2(Z*u+b*φ₋)
+        denominator = 1+abs2.(γ())*abs2.(Z*u+b*φ₋)
         term = (D₀*γ()./η).*trapz(numerator./denominator,dx)
 
         fvec[1] = real(term[1]/Z - 1)
@@ -870,36 +1087,36 @@ function solve_single_mode_lasing(inputs::Dict, D₀::Float64; ψ_init=0.000001,
     end
 
     function ψ_norm(Ψ,inds)
-        return sum(abs2(Ψ[inds]))
+        return sum(abs2.(Ψ[inds]))
     end
 
     function χ(Ψ,ω)
-        V = F_ext[:].*γ(ω)*D₀./(1+abs2(γ(ω)*Ψ))
+        V = F_ext[:].*γ(ω)*D₀./(1+abs2.(γ(ω)*Ψ))
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext,+)
     end
 
     function χʷ′(Ψ,ω)
-        V = F_ext[:].*γ′(ω).*D₀./(1+abs2(γ(ω).*Ψ)) - Γ′(ω).*abs2(Ψ).*F_ext[:].*γ(ω).*D₀./((1+abs2(γ(ω).*Ψ)).^2)
+        V = F_ext[:].*γ′(ω).*D₀./(1+abs2.(γ(ω).*Ψ)) - Γ′(ω).*abs2.(Ψ).*F_ext[:].*γ(ω).*D₀./((1+abs2.(γ(ω).*Ψ)).^2)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χʳʳ′(Ψ,ω)
-        V = -2.*(abs2(γ(ω))*F_ext[:].*real(γ(ω).*Ψ).*D₀.*real(Ψ)./((1+abs2(γ(ω)*Ψ)).^2))/ψ_norm(Ψ,inds)
+        V = -2.*(abs2.(γ(ω))*F_ext[:].*real(γ(ω).*Ψ).*D₀.*real(Ψ)./((1+abs2.(γ(ω)*Ψ)).^2))/ψ_norm(Ψ,inds)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χⁱʳ′(Ψ,ω)
-        V = -2.*(abs2(γ(ω))*F_ext[:].*imag(γ(ω).*Ψ).*D₀.*real(Ψ)./((1+abs2(γ(ω)*Ψ)).^2))/ψ_norm(Ψ,inds)
+        V = -2.*(abs2.(γ(ω))*F_ext[:].*imag(γ(ω).*Ψ).*D₀.*real(Ψ)./((1+abs2.(γ(ω)*Ψ)).^2))/ψ_norm(Ψ,inds)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χʳⁱ′(Ψ,ω)
-        V = -2.*(abs2(γ(ω))*F_ext[:].*real(γ(ω).*Ψ).*D₀.*imag(Ψ)./((1+abs2(γ(ω)*Ψ)).^2))/ψ_norm(Ψ,inds)
+        V = -2.*(abs2.(γ(ω))*F_ext[:].*real(γ(ω).*Ψ).*D₀.*imag(Ψ)./((1+abs2.(γ(ω)*Ψ)).^2))/ψ_norm(Ψ,inds)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χⁱⁱ′(Ψ,ω)
-        V = -2*(abs2(γ(ω)).*F_ext[:].*imag(γ(ω).*Ψ).*D₀.*imag(Ψ)./((1+abs2(γ(ω)*Ψ)).^2))/ψ_norm(Ψ,inds)
+        V = -2*(abs2.(γ(ω)).*F_ext[:].*imag(γ(ω).*Ψ).*D₀.*imag(Ψ)./((1+abs2.(γ(ω)*Ψ)).^2))/ψ_norm(Ψ,inds)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
