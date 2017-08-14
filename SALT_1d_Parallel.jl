@@ -83,29 +83,29 @@ end
 
 function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
-
-    nevals = nKs
-
+       
     ## definitions block
+    nevals = nKs
+    D₀ = inputs["D₀"]
+    N_ext = inputs["N_ext"]
     dx = inputs["dx"]
     x_ext = inputs["x_ext"]
-    ∂_ext = inputs["∂_ext"]
-    ℓ_ext = inputs["ℓ_ext"]
-    N_ext = inputs["N_ext"]
     x_inds = inputs["x_inds"]
-    F_ext = inputs["F_ext"]
-    D₀ = inputs["D₀"]
+    ∂_ext = inputs["∂_ext"]
     ɛ_ext = inputs["ɛ_sm"]
     F_ext = inputs["F_sm"]
     Γ_ext = inputs["Γ_ext"]
-    ##end of definitions block
-
     Γ = zeros(N_ext,1)
-    for dd in 2:length(∂_ext)-1
+    for dd in 3:length(∂_ext)-2
         δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
         Γ = Γ[:] .+ full(δ)./Γ_ext[dd]
     end
+    ## end of definitions block
 
+    if isempty(size(F))
+        F = [F]
+    end
+    
     ɛ = sparse(1:N_ext, 1:N_ext, ɛ_ext[:], N_ext, N_ext, +)
     Γ = sparse(1:N_ext, 1:N_ext, Γ[:]    , N_ext, N_ext, +)
 
@@ -131,8 +131,6 @@ function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real};
         k′ = Ω[i]
         k′² = k′^2
 
-        ∇² = laplacian(k′, inputs)
-        
         if (i > 1) & (i < Nq)
             dk′ = (Ω[i+1]-Ω[i-1]  )/2
         elseif i == Nq
@@ -141,6 +139,7 @@ function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real};
             dk′ = (Ω[2]  -Ω[end]  )/2
         end
 
+        ∇² = laplacian(k′, inputs)
         χk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(k′)*F[:].*F_ext[:]*k′², N_ext, N_ext, +)
 
         A  = (∇²+(ɛ+Γ)*k′²+χk′²)\M
