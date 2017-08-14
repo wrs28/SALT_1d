@@ -1,6 +1,6 @@
 module SALT_1d_Parallel
 
-export computeS_parallel, computeS_parallel!, S_wait, computePolesNL2_parallel, computeZerosNL2_parallel
+export computeS_parallel, computeS_parallel!, S_wait, computeK_NL2_parallel, computePole_NL2_parallel, computeZero_NL2_parallel, computeUZR_NL2_parallel
 
 using SALT_1d
 using SALT_1d.Core
