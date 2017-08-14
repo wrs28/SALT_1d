@@ -92,7 +92,6 @@ function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real};
     ∂_ext = inputs["∂_ext"]
     ℓ_ext = inputs["ℓ_ext"]
     N_ext = inputs["N_ext"]
-    λ = inputs["λ"]
     x_inds = inputs["x_inds"]
     F_ext = inputs["F_ext"]
     D₀ = inputs["D₀"]
