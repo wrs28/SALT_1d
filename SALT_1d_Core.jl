@@ -9,7 +9,7 @@ PML_ρ = 1/6
 PML_power_law = 3
 F_min = 1e-16
 α_imag = -.15
-subPixelNum = 2000
+subPixelNum = 1000
 
 ###################################################
 

@@ -385,7 +385,7 @@ function processInputs(fileName = "./SALT_2d_Inputs.jl")
 
     ɛ_ext = [1 1 1 1 1 1 1 1 ɛ]
 
-    inputs = Dict{Any,Any}(
+    inputs = Dict{String,Any}(
         "λ" => λ,
         "λ₀" => λ₀,
         "ω" => ω,
@@ -501,7 +501,7 @@ function updateInputs(inputs::Dict)
 
     ɛ_ext = [1 1 1 1 1 1 1 1 ɛ]
     
-    inputsNew = Dict{Any,Any}(
+    inputsNew = Dict{String,Any}(
         "λ" => λ,
         "λ₀" => λ₀,
         "ω" => ω,

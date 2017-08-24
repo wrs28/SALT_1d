@@ -1,6 +1,6 @@
 module SALT_1d
 
-export processInputs, updateInputs, computeCF, computePole_L, computeZero_L, computeUZR_L, computeK_NL1, computePole_NL1, computeZero_NL1, computeUZR_NL1, computeK_NL2, computePole_NL2, computeZero_NL2, computeUZR_NL2
+export processInputs, updateInputs, computeCF, computePole_L, computeZero_L, computeUZR_L, computeK_NL1, computePole_NL1, computeZero_NL1, computeUZR_NL1, computeK_NL2, computePole_NL2, computeZero_NL2, computeUZR_NL2, solve_scattered, computeS
 #solve_SPA, solve_scattered, solve_single_mode_lasing, solve_CPA, computeS, solve_CPA,
 # bootstrap
 
@@ -177,9 +177,15 @@ function computeZero_L(inputs::Dict, k::Number, nZeros::Int; F=1., truncate = fa
     
     inputs1 = deepcopy(inputs)
     
+    inputs1["ɛ_sm"] = conj(inputs["ɛ_sm"])
     inputs1["ɛ_ext"] = conj(inputs["ɛ_ext"])
+    inputs1["ɛ"] = conj(inputs["ɛ"])
+
+    inputs1["Γ"] = conj(inputs["Γ"])
     inputs1["Γ_ext"] = conj(inputs["Γ_ext"])
+
     inputs1["γ⟂"] = -inputs["γ⟂"]
+
     inputs1["D₀"] = -inputs["D₀"]
     
     kz,ψz = computePole_L(inputs1, conj(k), nZeros; F=F, truncate = truncate, ψ_init = conj(ψ_init) )
@@ -520,7 +526,7 @@ function computeK_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, 
     A₀ = zeros(Complex128,N_ext,nevals)
     A₁ = zeros(Complex128,N_ext,nevals)
 
-    rad(a,b,θ) = b./sqrt(sin(θ).^2+(b/a)^2.*cos(θ).^2)
+    rad(a,b,θ) = b./sqrt.(sin(θ).^2+(b/a)^2.*cos(θ).^2)
     θ = angle(inputs["k₀"]-1im*inputs["γ⟂"]-k)
     flag = abs(inputs["k₀"]-1im*inputs["γ⟂"]-k) < rad(Radii[1],Radii[2],θ)
     
@@ -698,30 +704,35 @@ end
 
 
 
+"""
+ψ =  solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, F=1., dispOpt = false, truncate = false, fileName = "", ftol=1e-6, iter=150)
+
+Solves using whatever boundary conditions are specified. Not necessarily scattering in the usual sense.
+"""
 function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, F=1., dispOpt = false, truncate = false, fileName = "", ftol=1e-6, iter=150)
 
-    # set outgoing boundary conditions, using exact implementation
-    inputs = deepcopy(inputs)
-    inputs["bc"] = ["out" "out"]
-    inputs = updateInputs(inputs)
     
     ## definitions block
     dx = inputs["dx"]
     x_ext = inputs["x_ext"]
     ∂_ext = inputs["∂_ext"]
+    Γ_ext = inputs["Γ_ext"]
     N_ext = inputs["N_ext"]
-    λ = inputs["λ"]
     x_inds = inputs["x_inds"]
-    F_ext = inputs["F_ext"]
     D₀ = inputs["D₀"]
     a = inputs["a"]
-    ɛ_ext, F_ext = subpixelSmoothing(inputs)
+    ɛ_ext = inputs["ɛ_sm"]
+    F_ext = inputs["F_sm"]
     ## end of definitions block
 
     function γ(k)
         return inputs["γ⟂"]/(k-inputs["k₀"]+1im*inputs["γ⟂"])
     end
 
+    if isempty(size(F))
+        F = [F]
+    end
+    
     k²= k^2
 
     ∇² = laplacian(k, inputs)
@@ -729,12 +740,12 @@ function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, 
     Γ = zeros(N_ext,1)
     for dd in 3:length(∂_ext)-2
         δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
-        Γ = Γ[:] + full(δ)/Γ_ext[dd]
+        Γ = Γ[:] .+ full(δ)./Γ_ext[dd]
     end
 
-    ɛk² = sparse(1:N_ext,1:N_ext, ɛ_ext[:]*k²            ,N_ext, N_ext, +)
-    χk² = sparse(1:N_ext,1:N_ext, D₀*γ(k)*(F.*F_ext[:])*k²,N_ext, N_ext, +)
-    Γk² = sparse(1:N_ext,1:N_ext, Γ[:]*k²                ,N_ext, N_ext, +)
+    ɛk² = sparse(1:N_ext,1:N_ext, k²*ɛ_ext[:]                 ,N_ext, N_ext, +)
+    χk² = sparse(1:N_ext,1:N_ext, k²*D₀*γ(k)*(F[:].*F_ext[:]) ,N_ext, N_ext, +)
+    Γk² = sparse(1:N_ext,1:N_ext, k²*Γ[:]                     ,N_ext, N_ext, +)
 
     δᵨ₊,∇δᵨ₊ = dirac_δ(x_ext,inputs["xᵨ₊"])
     Θᵨ₊,∇Θᵨ₊,∇²Θᵨ₊ = heaviside_Θ(x_ext,inputs["xᵨ₊"])
@@ -757,27 +768,27 @@ function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, 
 
 
     function χ(Ψ)
-        V = D₀*(F.*F_ext[:]).*γ(k)./(1+abs2.(γ(k)*Ψ))
+        V = D₀*(F[:].*F_ext[:]).*γ(k)./(1+abs2.(γ(k)*Ψ))
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χʳʳ′(Ψ)
-        V = -2.*abs2.(γ(k)).*(F.*F_ext[:]).*real(γ(k).*Ψ).*D₀.*real(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
+        V = -2.*abs2.(γ(k)).*(F[:].*F_ext[:]).*real(γ(k).*Ψ).*D₀.*real(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χⁱʳ′(Ψ)
-        V = -2.*abs2.(γ(k)).*(F.*F_ext[:]).*imag(γ(k).*Ψ).*D₀.*real(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
+        V = -2.*abs2.(γ(k)).*(F[:].*F_ext[:]).*imag(γ(k).*Ψ).*D₀.*real(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χʳⁱ′(Ψ)
-        V = -2.*abs2.(γ(k)).*(F.*F_ext[:]).*real(γ(k).*Ψ).*D₀.*imag(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
+        V = -2.*abs2.(γ(k)).*(F[:].*F_ext[:]).*real(γ(k).*Ψ).*D₀.*imag(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
     function χⁱⁱ′(Ψ)
-        V = -2.*abs2.(γ(k)).*(F.*F_ext[:]).*imag(γ(k).*Ψ).*D₀.*imag(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
+        V = -2.*abs2.(γ(k)).*(F[:].*F_ext[:]).*imag(γ(k).*Ψ).*D₀.*imag(Ψ)./((1+abs2.(γ(k)*Ψ)).^2)
         return sparse(1:N_ext, 1:N_ext, V, N_ext, N_ext, +)
     end
 
@@ -842,12 +853,16 @@ end
 
 
 
-function computeS(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, ψ_init = [], fileName = "")
+
+"""
+S =  computeS(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, ψ_init = [], fileName = "")
+"""
+function computeS(inputs1::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, ψ_init = [], fileName = "")
     # N is the number of steps to go from D0 = 0 to given D0
 
-    if (inputs["xᵨ₊"] ≤ inputs["∂"][1]) | (inputs["xᵨ₋"] ≥ inputs["∂"][end])
-        println("Warning: injection points outside of modeled region, S matrix will not be valid.")
-    end
+    inputs = deepcopy(inputs1)
+    inputs["bc"] = ["out" "out"]
+    inputs = updateInputs(inputs)
     
     x_inds = inputs["x_inds"]
 
