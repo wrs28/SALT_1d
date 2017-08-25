@@ -489,12 +489,12 @@ nKs is an upper-limit on the number of frequencies expected inside the contour.
 R_min is the radius of subtracted contour if the atomic point is contained inside the contour
 
 """
-function computeK_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=1., R_min = .01, rank_tol = 1e-8)
+function computeK_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nk=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
 
        
     ## definitions block
-    nevals = nKs
+    nevals = nk
     D₀ = inputs["D₀"]
     N_ext = inputs["N_ext"]
     dx = inputs["dx"]
