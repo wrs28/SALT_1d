@@ -9,7 +9,7 @@ PML_ρ = 1/6
 PML_power_law = 3
 F_min = 1e-16
 α_imag = -.15
-subPixelNum = Int(1e4)
+subPixelNum = Int(1e2)
 
 ###################################################
 
@@ -302,7 +302,7 @@ function subpixelSmoothing(inputs; truncate = false, r = [])
             x_min = (x[i]+x[i-1])/2
             x_max = (x[i]+x[i+1])/2
             
-            X = linspace(x_min,x_max,subPixelNum)
+            X = linspace(x_min,x_max,inputs["subPixelNum"])
             
             subRegion = whichRegion(X, inputs["∂_ext"])
             ɛ_smoothed[i] = mean(ɛ[subRegion])
@@ -325,7 +325,7 @@ processInputs(fileName = "./SALT_1d_Inputs.jl")
 """
 function processInputs(fileName = "./SALT_1d_Inputs.jl")
 
-    (N, k₀, k, bc, ∂, Γ, F, ɛ, γ⟂, D₀, a, b) = evalfile(fileName)
+    (N, k₀, k, bc, ∂, Γ, F, ɛ, γ⟂, D₀, a, b, subPixelNum) = evalfile(fileName)
 
     ω₀ = k₀
     ω  = k
@@ -404,7 +404,8 @@ function processInputs(fileName = "./SALT_1d_Inputs.jl")
         "Γ" => Γ,
         "Γ_ext" => Γ_ext,
         "dN" => dN,
-        "bc" => bc)
+        "bc" => bc,
+        "subPixelNum" => subPixelNum)
 
     r_ext = whichRegion(x_ext,∂_ext)
     ɛ_sm, F_sm = subpixelSmoothing(inputs1; truncate = false, r = [])
@@ -520,7 +521,8 @@ function updateInputs(inputs::Dict)
         "Γ" => Γ,
         "Γ_ext" => Γ_ext,
         "dN" => dN,
-        "bc" => bc)
+        "bc" => bc,
+        "subPixelNum" => inputs["subPixelNum"])
 
     r_ext = whichRegion(x_ext,∂_ext)
     ɛ_sm, F_sm = subpixelSmoothing(inputsNew1; truncate = false, r = [])
