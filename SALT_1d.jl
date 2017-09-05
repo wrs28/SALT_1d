@@ -79,7 +79,7 @@ end # end of function computeCFs
 
 
 """
-k,ψ =  computePole_L(inputs, k, nPoles; F=1, truncate = false, ψ_init = [])
+k,ψ =  computePole_L(inputs, k, nps; F=1, truncate = false, ψ_init = [])
 
 Compute poles w/o line pulling, using purely outoing PML's.
 
@@ -90,7 +90,7 @@ k[ # of poles]
 ψ[ cavity size, # of poles]
 
 """
-function computePole_L(inputs1::Dict, k::Number, nPoles::Int; F=1., truncate = false, ψ_init = []) 
+function computePole_L(inputs1::Dict, k::Number, nps::Int; F=1., truncate = false, ψ_init = []) 
 
     # set outgoing boundary conditions, using PML implementation
     inputs = deepcopy(inputs1)
@@ -128,27 +128,18 @@ function computePole_L(inputs1::Dict, k::Number, nPoles::Int; F=1., truncate = f
     ɛΓ⁻¹ = sparse( 1:N_ext, 1:N_ext, 1./(ɛ_ext[:].+Γ[:].-1im.*D₀.*F[:].*F_ext[:]), N_ext, N_ext, +)
 
     if isempty(ψ_init)
-        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nPoles, sigma = k^2+1.e-5)
+        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nps, sigma = k^2+1.e-5)
     else
-        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nPoles, sigma = k^2+1.e-5, v0 = ψ_init)
+        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nps, sigma = k^2+1.e-5, v0 = ψ_init)
     end
         
-    ψ = zeros(Complex128,length(inputs["x_ext"]),nPoles)
+    ψ = zeros(Complex128,length(inputs["x_ext"]),nps)
 
     r = inputs["x_inds"]
-    for ii = 1:nPoles
+    for ii = 1:nps
         N = trapz( (ɛ_ext[r] .+ Γ[r] .- 1im.*D₀.*F_ext[r].*F[r1]) .*abs2.(ψ_ext[r,ii]),dx)
         ψ[:,ii] = ψ_ext[:,ii]./sqrt.(N)
     end
-
-#    ɛ_ext[r] .+ Γ[r] .- 1im.*D₀.*F_ext[r].*F[:].*abs2.(ψ_ext[r,ii])
-#    inds1 = inputs["x_inds"][1]:inputs["x_inds"][end]
-#    r1 = whichRegion(inputs["x"],inputs["∂"])
-#    if length(F)>1
-#        F_temp = F[r1]
-#    else
-#        F_temp = F
-#    end
 
     if truncate
         return sqrt.(k²), ψ[inputs["x_inds"],:]
@@ -156,24 +147,25 @@ function computePole_L(inputs1::Dict, k::Number, nPoles::Int; F=1., truncate = f
         return sqrt.(k²), ψ
     end
 
-end # end of function computePole_L
+end
+# end of function computePole_L
 
 
 
 
 """
-k,ψ =  computeZero_L(inputs, k, nZeros; F=1, truncate = false, ψ_init = [])
+k,ψ =  computeZero_L(inputs, k, nzs; F=1, truncate = false, ψ_init = [])
 
 Compute zeros w/o line pulling, using purely incoming PML's.
 
 Set D or F to zero to get passive cavity.
 
-k[ # of poles]
+k[ # of zeros]
 
 ψ[ cavity size, # of zeros]
 
 """
-function computeZero_L(inputs::Dict, k::Number, nZeros::Int; F=1., truncate = false, ψ_init = [])
+function computeZero_L(inputs::Dict, k::Number, nzs::Int; F=1., truncate = false, ψ_init = [])
     
     inputs1 = deepcopy(inputs)
     
@@ -188,27 +180,28 @@ function computeZero_L(inputs::Dict, k::Number, nZeros::Int; F=1., truncate = fa
 
     inputs1["D₀"] = -inputs["D₀"]
     
-    kz,ψz = computePole_L(inputs1, conj(k), nZeros; F=F, truncate = truncate, ψ_init = conj(ψ_init) )
+    kz,ψz = computePole_L(inputs1, conj(k), nzs; F=F, truncate = truncate, ψ_init = conj(ψ_init) )
     
     return conj(kz),conj(ψz)
 
-end # end of function computeZero_L
+end 
+# end of function computeZero_L
 
 
 
 
 
 """
-k,ψ =  computeUZR_L(inputs, k, nFreqs; F=1., direction = "R", truncate = false, ψ_init = [])
+k,ψ =  computeUZR_L(inputs, k, nus; F=1., direction = "R", truncate = false, ψ_init = [])
 
 Compute UZR (unidirectional zero reflection) states w/o line pulling. Sets bc's to incident PML on left and outgoing on right if DIRECTION = "R", and vice versa if "L"
 
-k[ # of Freqs]
+k[ # of UZRs]
 
-ψ[ cavity size, # of Freqs]
+ψ[ cavity size, # of UZRs]
 
 """
-function computeUZR_L(inputs1::Dict, k::Number, nFreqs::Int; F=1., direction = "R", truncate = false, ψ_init = []) 
+function computeUZR_L(inputs1::Dict, k::Number, nus::Int; F=1., direction = "R", truncate = false, ψ_init = []) 
 
     # set outgoing boundary conditions, using PML implementation
     inputs = deepcopy(inputs1)
@@ -253,12 +246,12 @@ function computeUZR_L(inputs1::Dict, k::Number, nFreqs::Int; F=1., direction = "
     ∇² = laplacian(k, inputs)
 
     if isempty(ψ_init)
-        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nFreqs, sigma = k^2+1.e-6)
+        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nus, sigma = k^2+1.e-6)
     else
-        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nFreqs, sigma = k^2+1.e-6, v0 = ψ_init)
+        (k²,ψ_ext,nconv,niter,nmult,resid) = eigs(-ɛΓ⁻¹*∇²,which = :LM, nev = nus, sigma = k^2+1.e-6, v0 = ψ_init)
     end
         
-    ψ = zeros(Complex128,length(inputs["x_ext"]),nFreqs)
+    ψ = zeros(Complex128,length(inputs["x_ext"]),nus)
 
     r = inputs["x_inds"]
     for ii = 1:nFreqs
@@ -272,7 +265,8 @@ function computeUZR_L(inputs1::Dict, k::Number, nFreqs::Int; F=1., direction = "
         return sqrt.(k²),ψ
     end
 
-end   # end of function computeUZR_L
+end   
+# end of function computeUZR_L
 
 
 
@@ -478,7 +472,7 @@ end
 
 
 """
-k =  computeK_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
+k =  computeK_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nks=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
 
 Compute K's at S-matrix evec specified in input file, with line-pulling, using contour method. 
 
@@ -489,12 +483,12 @@ nKs is an upper-limit on the number of frequencies expected inside the contour.
 R_min is the radius of subtracted contour if the atomic point is contained inside the contour
 
 """
-function computeK_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nk=3, F=1., R_min = .01, rank_tol = 1e-8)
+function computeK_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nks=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
 
        
     ## definitions block
-    nevals = nk
+    nevals = nks
     D₀ = inputs["D₀"]
     N_ext = inputs["N_ext"]
     dx = inputs["dx"]
@@ -609,18 +603,18 @@ end
 
 
 """
-k =  computePole_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
+k =  computePole_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nps=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
 
 Compute poles, with line-pulling, using contour method. 
 
 Inputs: k is centroid of contour
 Radii = (real radius, imag radius) are the semi-diameters of the contour
 Nq are the number of quadrature points.
-nPoles is an upper-limit on the number of frequencies expected inside the contour.
+nps is an upper-limit on the number of frequencies expected inside the contour.
 R_min is the radius of subtracted contour if the atomic point is contained inside the contour
 
 """
-function computePole_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=1., R_min = .01, rank_tol = 1e-8)
+function computePole_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nps=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
 
     # set outgoing boundary conditions, using exact implementation
@@ -628,7 +622,7 @@ function computePole_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=1
     inputs["bc"] = ["out" "out"]
     inputs = updateInputs(inputs)
     
-    k = computeK_NL2(inputs, k, Radii; Nq=Nq, nKs=nPoles, F=F, R_min = R_min, rank_tol = rank_tol)
+    k = computeK_NL2(inputs, k, Radii; Nq=Nq, nks=nps, F=F, R_min = R_min, rank_tol = rank_tol)
 
     return k
 
@@ -638,18 +632,18 @@ end
 
 
 """
-k =  computeZero_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
+k =  computeZero_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nzs=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
 
 Compute zeros, with line-pulling, using contour method. 
 
 Inputs: k is centroid of contour
 Radii = (real radius, imag radius) are the semi-diameters of the contour
 Nq are the number of quadrature points.
-nZeros is an upper-limit on the number of frequencies expected inside the contour.
+nzs is an upper-limit on the number of frequencies expected inside the contour.
 R_min is the radius of subtracted contour if the atomic point is contained inside the contour
 
 """
-function computeZero_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
+function computeZero_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nzs=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
     
     # set outgoing boundary conditions, using exact implementation
@@ -657,7 +651,7 @@ function computeZero_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=1
     inputs["bc"] = ["in" "in"]
     inputs = updateInputs(inputs)
     
-    k = computeK_NL2(inputs, k, Radii; Nq=Nq, nKs=nZeros, F=F, R_min = R_min, rank_tol = rank_tol)
+    k = computeK_NL2(inputs, k, Radii; Nq=Nq, nks=nzs, F=F, R_min = R_min, rank_tol = rank_tol)
 
     return k
 
@@ -668,18 +662,18 @@ end
 
 
 """
-k =  computeUZR_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
+k =  computeUZR_NL2(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nus=3, F=[1.], R_min = .01, rank_tol = 1e-8) = .5, max_count = 15, max_iter = 50)
 
 Compute UZR, with line-pulling, using contour method. 
 
 Inputs: k is centroid of contour
 Radii = (real radius, imag radius) are the semi-diameters of the contour
 Nq are the number of quadrature points.
-nZeros is an upper-limit on the number of frequencies expected inside the contour.
+nus is an upper-limit on the number of frequencies expected inside the contour.
 R_min is the radius of subtracted contour if the atomic point is contained inside the contour
 
 """
-function computeUZR_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direction = "R", Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
+function computeUZR_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direction = "R", Nq=100, nus=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
     
     # set outgoing boundary conditions, using PML implementation
@@ -694,7 +688,7 @@ function computeUZR_NL2(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direc
     end
     inputs = updateInputs(inputs)
     
-    k = computeK_NL2(inputs, k, Radii; Nq=Nq, nKs=nZeros, F=F, R_min = R_min, rank_tol = rank_tol)
+    k = computeK_NL2(inputs, k, Radii; Nq=Nq, nks=nuRs, F=F, R_min = R_min, rank_tol = rank_tol)
 
     return k
 

@@ -8,14 +8,14 @@ using SALT_1d.Core
 
 
 """
-k = computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8)
+k = computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nks=3, F=[1.], R_min = .01, rank_tol = 1e-8)
 """
 
-function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8)
+function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nks=3, F=[1.], R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
        
     ## definitions block
-    nevals = nKs
+    nevals = nks
     D₀ = inputs["D₀"]
     N_ext = inputs["N_ext"]
     dx = inputs["dx"]
@@ -125,15 +125,15 @@ end
 
 
 """
-k = computePole_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=[1.], R_min = .01, rank_tol = 1e-8)
+k = computePole_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nps=3, F=[1.], R_min = .01, rank_tol = 1e-8)
 """
-function computePole_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=[1.], R_min = .01, rank_tol = 1e-8)
+function computePole_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nps=3, F=[1.], R_min = .01, rank_tol = 1e-8)
     
     inputs = deepcopy(inputs1)
     inputs["bc"] = ["out" "out"]
     inputs = updateInputs(inputs)
         
-    k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nKs=nPoles, F=F, R_min=R_min, rank_tol = rank_tol)
+    k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nks=nps, F=F, R_min=R_min, rank_tol = rank_tol)
     
     return k
     
@@ -143,15 +143,15 @@ end
 
 
 """
-k = computeZero_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=[1.], R_min = .01,
+k = computeZero_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nzs=3, F=[1.], R_min = .01,
 """
-function computeZero_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=[1.], R_min = .01, rank_tol = 1e-8)
+function computeZero_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nzs=3, F=[1.], R_min = .01, rank_tol = 1e-8)
     
     inputs = deepcopy(inputs1)
     inputs["bc"] = ["in" "in"]
     inputs = updateInputs(inputs)
     
-    k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nKs=nZeros, F=F, R_min=R_min, rank_tol = rank_tol)
+    k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nks=nzs, F=F, R_min=R_min, rank_tol = rank_tol)
     
     return k
     
@@ -161,9 +161,9 @@ end
 
 
 """
-k = computeUZR_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direction = "R", Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
+k = computeUZR_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direction = "R", Nq=100, nus=3, F=1., R_min = .01, rank_tol = 1e-8)
 """
-function computeUZR_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direction = "R", Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
+function computeUZR_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direction = "R", Nq=100, nus=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
     
     # set outgoing boundary conditions, using PML implementation
@@ -178,7 +178,7 @@ function computeUZR_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Rea
     end
     inputs = updateInputs(inputs)
     
-    k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nKs=nZeros, F=F, R_min = R_min, rank_tol = rank_tol)
+    k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nks=nus, F=F, R_min = R_min, rank_tol = rank_tol)
 
     return k
 
@@ -189,7 +189,7 @@ end
 
 
 """
-computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, fileName = "")
+S,r = computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, fileName = "")
 """
 function computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, fileName = "")
     # N is the number of steps to go from D0 = 0 to given D0 or a=0 to a, whichever is specified in N_Type
@@ -218,7 +218,9 @@ end
 # end of function computeS_parallel
 
 
-
+"""
+computeS_parallel!(S::SharedArray,inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true)
+"""
 function computeS_parallel!(S::SharedArray,inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true)
 # N is the number of steps to go from D0 = 0 to given D0 or a=0 to a
 
@@ -229,11 +231,14 @@ function computeS_parallel!(S::SharedArray,inputs::Dict; N=10, N_Type="D", isNon
         @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs); N=N, N_Type=N_Type, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt))
     end
 
-end # end of function computeS_parallel!
+end 
+# end of function computeS_parallel!
 
 
 
-
+"""
+computeS_parallel_core!(S::SharedArray, inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt=true)
+"""
 function computeS_parallel_core!(S::SharedArray, inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt=true)
 
     idx = indexpids(S)
@@ -246,11 +251,14 @@ function computeS_parallel_core!(S::SharedArray, inputs::Dict; N=10, N_Type="D",
     
     S[:,:,k_inds,:] = computeS(inputs1; N=N, N_Type=N_Type, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt)
     
-end # end of function computeS_parallel_core
+end 
+# end of function computeS_parallel_core
 
 
 
-
+"""
+S_wait(r::Channel)
+"""
 function S_wait(r::Channel)
 
     c = 0
@@ -262,28 +270,6 @@ function S_wait(r::Channel)
     return
     
 end
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
 
 
 
