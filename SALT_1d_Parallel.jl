@@ -1,85 +1,15 @@
 module SALT_1d_Parallel
 
-export computeS_parallel, computeS_parallel!, S_wait, computeK_NL2_parallel, computePole_NL2_parallel, computeZero_NL2_parallel, computeUZR_NL2_parallel
+export computeK_NL2_parallel, computePole_NL2_parallel, computeZero_NL2_parallel, computeUZR_NL2_parallel, computeS_parallel, computeS_parallel!, S_wait
 
 using SALT_1d
 using SALT_1d.Core
 
 
 
-function computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, fileName = "")
-    # N is the number of steps to go from D0 = 0 to given D0 or a=0 to a, whichever is specified in N_Type
-    # defaults to running S only on workers, not on head node. Use computeS_parallel! for a little more control
-
-    if isempty(fileName)
-        S = SharedArray(Complex128,(2,2,length(inputs["k"]),N), pids=workers())
-    else
-        S = SharedArray(abspath(fileName),Complex128,(2,2,length(inputs["k"]),N), pids=workers(), mode="w+")
-    end
-    
-    for i in 1:length(S)
-        S[i]=1im*NaN
-    end
-
-    P = procs(S)
-    r = Channel(length(P))
-    for pp in 1:length(P)
-        p = P[pp]
-        @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs); N=N, N_Type=N_Type, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt))
-    end
-
-    return S,r
-
-end # end of function computeS_parallel
-
-
-
-function computeS_parallel!(S::SharedArray,inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true)
-# N is the number of steps to go from D0 = 0 to given D0 or a=0 to a
-
-    P = procs(S)
-    r = Channel(length(P))
-    for pp in 1:length(P)
-        p = P[pp]
-        @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs); N=N, N_Type=N_Type, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt))
-    end
-
-end # end of function computeS_parallel!
-
-
-
-
-function computeS_parallel_core!(S::SharedArray, inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt=true)
-
-    idx = indexpids(S)
-    nchunks = length(procs(S))
-    splits = [round(Int, s) for s in linspace(0,size(S,3),nchunks+1)] #define boudnaries between ranges
-    k_inds = splits[idx]+1:splits[idx+1] #return ranges
-
-    inputs1 = deepcopy(inputs)
-    inputs1["k"] = inputs["k"][k_inds]
-    
-    S[:,:,k_inds,:] = computeS(inputs1; N=N, N_Type=N_Type, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt)
-    
-end # end of function computeS_parallel_core
-
-
-
-
-function S_wait(r::Channel)
-
-    c = 0
-    while c < r.sz_max
-        take!(r)
-        c += 1
-    end
-    
-    return
-    
-end
-
-
-
+"""
+k = computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8)
+"""
 
 function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nKs=3, F=[1.], R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
@@ -194,6 +124,9 @@ end
 
 
 
+"""
+k = computePole_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=[1.], R_min = .01, rank_tol = 1e-8)
+"""
 function computePole_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nPoles=3, F=[1.], R_min = .01, rank_tol = 1e-8)
     
     inputs = deepcopy(inputs1)
@@ -209,7 +142,9 @@ end
 
 
 
-
+"""
+k = computeZero_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=[1.], R_min = .01,
+"""
 function computeZero_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nZeros=3, F=[1.], R_min = .01, rank_tol = 1e-8)
     
     inputs = deepcopy(inputs1)
@@ -225,7 +160,9 @@ end
 
 
 
-
+"""
+k = computeUZR_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direction = "R", Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
+"""
 function computeUZR_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direction = "R", Nq=100, nZeros=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
     
@@ -247,6 +184,88 @@ function computeUZR_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Rea
 
 end 
 # end of function computeUZR_NL2_parallel
+
+
+
+
+"""
+computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, fileName = "")
+"""
+function computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, fileName = "")
+    # N is the number of steps to go from D0 = 0 to given D0 or a=0 to a, whichever is specified in N_Type
+    # defaults to running S only on workers, not on head node. Use computeS_parallel! for a little more control
+
+    if isempty(fileName)
+        S = SharedArray(Complex128,(2,2,length(inputs["k"]),N), pids=workers())
+    else
+        S = SharedArray(abspath(fileName),Complex128,(2,2,length(inputs["k"]),N), pids=workers(), mode="w+")
+    end
+    
+    for i in 1:length(S)
+        S[i]=1im*NaN
+    end
+
+    P = procs(S)
+    r = Channel(length(P))
+    for pp in 1:length(P)
+        p = P[pp]
+        @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs); N=N, N_Type=N_Type, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt))
+    end
+
+    return S,r
+
+end 
+# end of function computeS_parallel
+
+
+
+function computeS_parallel!(S::SharedArray,inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true)
+# N is the number of steps to go from D0 = 0 to given D0 or a=0 to a
+
+    P = procs(S)
+    r = Channel(length(P))
+    for pp in 1:length(P)
+        p = P[pp]
+        @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs); N=N, N_Type=N_Type, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt))
+    end
+
+end # end of function computeS_parallel!
+
+
+
+
+function computeS_parallel_core!(S::SharedArray, inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt=true)
+
+    idx = indexpids(S)
+    nchunks = length(procs(S))
+    splits = [round(Int, s) for s in linspace(0,size(S,3),nchunks+1)] #define boudnaries between ranges
+    k_inds = splits[idx]+1:splits[idx+1] #return ranges
+
+    inputs1 = deepcopy(inputs)
+    inputs1["k"] = inputs["k"][k_inds]
+    
+    S[:,:,k_inds,:] = computeS(inputs1; N=N, N_Type=N_Type, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt)
+    
+end # end of function computeS_parallel_core
+
+
+
+
+function S_wait(r::Channel)
+
+    c = 0
+    while c < r.sz_max
+        take!(r)
+        c += 1
+    end
+    
+    return
+    
+end
+
+
+
+
 
 
 

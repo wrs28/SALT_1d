@@ -1,6 +1,6 @@
 module SALT_1d
 
-export processInputs, updateInputs, computeCF, computePole_L, computeZero_L, computeUZR_L, computeK_NL1, computePole_NL1, computeZero_NL1, computeUZR_NL1, computeK_NL2, computePole_NL2, computeZero_NL2, computeUZR_NL2, solve_scattered, computeS
+export processInputs, updateInputs, computeCF, computePole_L, computeZero_L, computeUZR_L, computeK_NL1, computePole_NL1, computeZero_NL1, computeUZR_NL1, computeK_NL2, computePole_NL2, computeZero_NL2, computeUZR_NL2, solve_scattered, computeG, computeS
 #solve_SPA, solve_scattered, solve_single_mode_lasing, solve_CPA, computeS, solve_CPA,
 # bootstrap
 
@@ -713,7 +713,6 @@ function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, 
 
     
     ## definitions block
-    dx = inputs["dx"]
     x_ext = inputs["x_ext"]
     ∂_ext = inputs["∂_ext"]
     Γ_ext = inputs["Γ_ext"]
@@ -850,6 +849,69 @@ function solve_scattered(inputs::Dict, k::Number; isNonLinear=false, ψ_init=0, 
 end 
 # end of function solve_scattered
 
+
+
+"""
+G = computeG(inputs::Dict, k::Number, x₀::Number; F=1., fileName = "", truncate = false)
+
+computes Greens fn G(k;x₀,x), using whatever boundary condition is specified in the input file.
+"""
+function computeG(inputs::Dict, k::Number, x₀::Number; F=1., fileName = "", truncate = false)
+    
+    ## definitions block
+    N_ext = inputs["N_ext"]
+    x_ext = inputs["x_ext"]
+    ∂_ext = inputs["∂_ext"]
+    Γ_ext = inputs["Γ_ext"]
+    D₀ = inputs["D₀"]
+    ɛ_ext = inputs["ɛ_sm"]
+    F_ext = inputs["F_sm"]
+    ## end of definitions block
+    
+    function γ(k)
+        return inputs["γ⟂"]/(k-inputs["k₀"]+1im*inputs["γ⟂"])
+    end
+
+    if isempty(size(F))
+        F = [F]
+    end
+    
+    k²= k^2
+
+    ∇² = laplacian(k, inputs)
+
+    Γ = zeros(N_ext,1)
+    for dd in 3:length(∂_ext)-2
+        δ,dummy1 = dirac_δ(x_ext,∂_ext[dd])
+        Γ = Γ[:] .+ full(δ)./Γ_ext[dd]
+    end
+
+    ɛk² = sparse(1:N_ext,1:N_ext, k²*ɛ_ext[:]                 ,N_ext, N_ext, +)
+    χk² = sparse(1:N_ext,1:N_ext, k²*D₀*γ(k)*(F[:].*F_ext[:]) ,N_ext, N_ext, +)
+    Γk² = sparse(1:N_ext,1:N_ext, k²*Γ[:]                     ,N_ext, N_ext, +)
+    
+    δ₀,∇δ₀ = dirac_δ(x_ext,x₀)
+
+    ψ_ext = (∇²+ɛk²+χk²+Γk²)\full(δ₀)
+
+    if !isempty(fileName)
+        if truncate
+            foo(fid) = serialize(fid,(inputs,ψ_ext[inputs["x_inds"]]))
+            open(foo,fileName,"w")
+        else
+            foo1(fid) = serialize(fid,(inputs,ψ_ext))
+            open(foo1,fileName,"w")
+        end
+    end
+    
+    if truncate
+        return ψ_ext[inputs["x_inds"]]
+    else
+        return ψ_ext
+    end
+    
+end
+# end of function ComputeG
 
 
 
