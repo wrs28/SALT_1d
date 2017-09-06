@@ -272,8 +272,6 @@ function S_wait(r::Channel)
 end
 
 
-
-
 #function computePolesL!(inputs::Dict, k::Number, nPoles::Int; F=1., eval::SharedArray) 
 #     #No Line Pulling
 #
@@ -329,10 +327,10 @@ end
 #
 #
 #
-#function computeZerosL_parallel_core!(Ω::SharedArray,Ω₊::SharedArray,Ω₋::SharedArray,inputs::Dict,ω,N::Int,M::Int,displayOpt)
-#
+#function computePolesL_parallel_core!(Ω::SharedArray, Ω₊::SharedArray, Ω₋::SharedArray, inputs::Dict, ω::Number, N::Int, M::Int, displayOpt)
+
 #    a_min = .001
-#
+
 #    function ωa_range(q::SharedArray) #cannibalized from Julia docs page
 #        idx = indexpids(q)
 #        if idx == 0 # This worker is not assigned a piece
@@ -342,9 +340,9 @@ end
 #        splits = [round(Int, s) for s in linspace(0,size(q,1)*size(q,3),nchunks+1)]
 #        ind2sub((size(q,1),size(q,3)),splits[idx]+1:splits[idx+1])
 #    end
-#
+
 #    ω_inds, a_inds = ωa_range(Ω)
-#
+
 #    D = linspace(0,inputs["D₀"],N)
 #    a = linspace(a_min,inputs["a"],M)
 #
@@ -475,4 +473,6 @@ end
 #
 #end
 
-end # end of Module SALT_1D.Parallel
+
+end
+# end of Module SALT_1D.Parallel
