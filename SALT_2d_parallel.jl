@@ -117,7 +117,7 @@ computePole_NL2_parallel(inputs, kc, Radii; np=3, Nq=100, F=[1.], R_min=.01, ran
 
     Parallelizes quadrature.
 """
-function computePole_NL2_parallel(inputs::InputStruct, k::Union{Complex128,Float64,Int},
+function computePole_NL2_parallel(inputs1::InputStruct, k::Union{Complex128,Float64,Int},
     Radii::Tuple{Float64,Float64}; np::Int=3, Nq::Int=100, F::Array{Float64,1}=[1.],
     R_min::Float64=.01, rank_tol::Float64=1e-8)::Array{Complex{Float64},1}
 
@@ -140,7 +140,7 @@ computeZero_NL2_parallel(inputs, kc, Radii; nz=3, Nq=100, F=[1.], R_min=.01, ran
 
     Parallelizes quadrature.
 """
-function computeZero_NL2_parallel(inputs::InputStruct, kc::Union{Complex128,Float64,Int},
+function computeZero_NL2_parallel(inputs1::InputStruct, kc::Union{Complex128,Float64,Int},
     Radii::Tuple{Float64,Float64}; nk::Int=3, Nq::Int=100, F::Array{Float64,1}=[1.],
     R_min::Float64=.01, rank_tol::Float64=1e-8)::Array{Complex128,1}
 
@@ -166,7 +166,7 @@ computeUZR_NL2_parallel(inputs, kc, Radii; nz=3, Nq=100, F=[1.], R_min=.01, rank
 
     Parallelizes quadrature.
 """
-function computeUZR_NL2_parallel(inputs::InputStruct, kc::Union{Complex128,Float64,Int},
+function computeUZR_NL2_parallel(inputs1::InputStruct, kc::Union{Complex128,Float64,Int},
     Radii::Tuple{Float64,Float64}; nu::Int=3, Nq::Int=100, F::Array{Float64,1}=[1.],
     R_min::Float64=.01, rank_tol::Float64=1e-8,
     direction::Array{Int,1}=[1,0])::Array{Complex{Float64},1}
