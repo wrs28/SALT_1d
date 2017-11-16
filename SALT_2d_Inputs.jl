@@ -1,28 +1,28 @@
-N = 251*[1,1]
+coord = "xy" # XY, xy, Cart, cart, Cartesian, cartesian, rθ, rtheta, polar, Polar
+N = [604,151]
+
+∂  =  [-1.5,  .5,   -.2,   .2]
+bc =  ["o", "d", "d", "d"]
+bk = [.5,  0.] # Bloch wave vector [kₓ kᵤ]
+
 n = 2.
+F = [0.0, 0.0, 1.0]
+ɛ = [1.0, 1.0, n  ].^2
+incidentWaveRegions = [2, 3]
+scatteringRegions = [3]
 
-R = .5 # radius of disk
-β = 1.0842857142857143
-
-λ₀ = 2π*R./10
-λ  = 2π*R./linspace(9,11,10)
-
-origin = (0.,0.)
-∂  =  [-1   1    -1    1]*1.2*R + [origin[1] origin[1] origin[2] origin[2]]
-bc =  ["o"  "o"  "o"  "o"]
-bk = [1.       0.] # Bloch wave vector [kₓ kᵤ]
-
-F = [0.0   1.0   0.0]
-ɛ = [1.0   n     n  ].^2
-
+k₀ = 20
+k  = 20.6 + linspace(-.5,+.5,75)
 γ⊥ = 1e8
 D₀ = 0.00
 
-a = 1
+geoParams = [ .9, .9, 1.3, π/5] # in general an array
 
-extras = (origin,π/3,R,β) #(θ,R) this is in general a tuplet
+nChannels = 2
+a = [1., 0.]
+inputs_modes = [[1],[]]
 
-geometryFile = "SALT_2d_Geometry.jl"
-incidentWaveFile = "SALT_2d_IncidentWave.jl"
+subPixelNum = 15
 
-return (N, λ₀, λ, ∂, bc, bk, F, ɛ, γ⊥, D₀, a, geometryFile, incidentWaveFile, extras)
+return (coord, N, k₀, k, ∂, bc, bk, inputs_modes, F, ɛ, γ⊥, D₀, a, geoParams,
+         incidentWaveRegions, scatteringRegions, nChannels, subPixelNum)
