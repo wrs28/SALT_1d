@@ -123,7 +123,7 @@ function computePole_NL2_parallel(inputs1::InputStruct, k::Union{Complex128,Floa
 
     inputs = open_to_pml_out(inputs1)
 
-    k = computeK_NL2_parallel(inputs, kc, Radii; np=nk, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
+    k = computeK_NL2_parallel(inputs, kc, Radii; nk=np, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
 end # end of function computePole_NL2_parallel
 
 
@@ -141,12 +141,12 @@ computeZero_NL2_parallel(inputs, kc, Radii; nz=3, Nq=100, F=[1.], R_min=.01, ran
     Parallelizes quadrature.
 """
 function computeZero_NL2_parallel(inputs1::InputStruct, kc::Union{Complex128,Float64,Int},
-    Radii::Tuple{Float64,Float64}; nk::Int=3, Nq::Int=100, F::Array{Float64,1}=[1.],
+    Radii::Tuple{Float64,Float64}; nz::Int=3, Nq::Int=100, F::Array{Float64,1}=[1.],
     R_min::Float64=.01, rank_tol::Float64=1e-8)::Array{Complex128,1}
 
     inputs = open_to_pml_in(inputs1)
 
-    k = computeK_NL2_parallel(inputs, kc, Radii; nz=nk, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
+    k = computeK_NL2_parallel(inputs, kc, Radii; nk=nz, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
 end # end of function computeZero_NL2_parallel
 
 
@@ -184,7 +184,7 @@ function computeUZR_NL2_parallel(inputs1::InputStruct, kc::Union{Complex128,Floa
         updateInputs!(inputs, :bc, [inputs.bc[1], inputs.bc[2], "pml_out", "pml_in"])
     end
 
-    k = computeK_NL2_parallel(inputs, kc, Radii; nu=nk, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
+    k = computeK_NL2_parallel(inputs, kc, Radii; nk=nu, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
 end # end of function computeUZR_NL2_parallel
 
 
