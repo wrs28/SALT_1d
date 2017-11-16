@@ -1,0 +1,696 @@
+"""
+inputs = Inputs(coord, N, N_ext, ℓ, ℓ_ext, dx̄, x̄, x̄_ext, x̄_inds, x₁, x₁_ext,
+    x₁_inds x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, r_ext, ɛ, ɛ_ext, ɛ_sm, F, F_ext, F_sm,
+    ω, ω₀, k, k₀, γ⟂, D₀, a, bc, bc_sig, bk, input_modes, subPixelNum, geometry,
+    geoParams, scatteringRegions, incidentWaveRegions, nChannels,
+    channelBoundaries)
+"""
+mutable struct InputStruct
+    coord::String
+    N::Array{Int,1}
+    N_ext::Array{Int,1}
+    ℓ::Array{Float64,1}
+    ℓ_ext::Array{Float64,1}
+    dx̄::Array{Float64,1}
+    x̄::Tuple{Array{Float64,1},Array{Float64,1}}
+    x̄_ext::Tuple{Array{Float64,1},Array{Float64,1}}
+    x̄_inds::Array{Int,1}
+    x₁::Array{Float64,1}
+    x₁_ext::Array{Float64,1}
+    x₁_inds::Array{Int,1}
+    x₂::Array{Float64,1}
+    x₂_ext::Array{Float64,1}
+    x₂_inds::Array{Int,1}
+    ∂R::Array{Float64,1}
+    ∂R_ext::Array{Float64,1}
+    r_ext::Array{Int,2}
+    ɛ::Array{Complex128,1}
+    ɛ_ext::Array{Complex128,1}
+    ɛ_sm::Array{Complex128,2}
+    F::Array{Float64,1}
+    F_ext::Array{Float64,1}
+    F_sm::Array{Float64,2}
+    ω::Array{Complex128,1}
+    ω₀::Complex128
+    k::Array{Complex128,1}
+    k₀::Complex128
+    γ⟂::Float64
+    D₀::Float64
+    a::Array{Complex128,1}
+    bc::Array{String,1}
+    bc_sig::String
+    bk::Array{Complex128,1}
+    input_modes::Array{Array{Int64,1},1}
+    subPixelNum::Int
+    geometry::Function
+    geoParams::Array{Float64,1}
+    scatteringRegions::Array{Int,1}
+    incidentWaveRegions::Array{Int,1}
+    nChannels::Int
+end
+
+
+"""
+∇ =  grad(N, dx)
+
+    1-dim Gradient with N points, lattice spacing dx. It's the forward gradient (I think).
+
+    sparse ∇[N,N+1]
+"""
+function grad_1d(N::Int, dx::Float64)::SparseMatrixCSC{Complex128,Int}
+
+    I₁ = Array(1:N)
+    J₁ = Array(1:N)
+    V₁ = fill(Complex(-1/dx), N)
+
+    I₂ = Array(1:N)
+    J₂ = Array(2:(N+1))
+    V₂ = fill(Complex(+1/dx), N)
+
+    ∇ = sparse(vcat(I₁,I₂), vcat(J₁,J₂), vcat(V₁,V₂), N, N+1, +)
+end #end of function grad_1d
+
+
+"""
+∇₁,∇₂ =  grad(N, dx)
+
+    2-dim gradients with N[1],N[2] points, lattice spacing dx̄[1], dx̄[2].
+    It's the forward gradient (I think).
+
+    sparse (∇₁[N,N],∇₂[N,N])
+"""
+function ( grad(N::Array{Int,1}, dx̄::Array{Float64,1})::
+    Tuple{SparseMatrixCSC{Complex128,Int},SparseMatrixCSC{Complex128,Int}} )
+
+    N₁ = N[1]
+    dx₁ = dx̄[1]
+
+    N₂ = N[2]
+    dx₂ = dx̄[2]
+
+    ∇₁ = grad_1d(N₁-1,dx₁)
+    ∇₂ = grad_1d(N₂-1,dx₂)
+
+    ∇₁ = kron(speye(N₂,N₂),∇₁)
+    ∇₂ = kron(∇₂,speye(N₁,N₁))
+
+    return ∇₁,∇₂
+end # end of function grad
+
+
+"""
+∇² = laplacian(k, inputs)
+
+    Computes 2-dim laplacian based on parameters and boundary conditions given in
+    INPUTS, evaluated at (complex) frequency K.
+"""
+function laplacian(k::Complex128, inputs::InputStruct)::SparseMatrixCSC{Complex128,Int}
+
+    # definitions block#
+    ∂R = inputs.∂R_ext
+    x₁ = inputs.x₁_ext
+    x₂ = inputs.x₂_ext
+    bc = inputs.bc
+
+    k₁ = inputs.bk[1]
+    k₂ = inputs.bk[2]
+
+    ℓ₁ = inputs.ℓ_ext[1]
+    ℓ₂ = inputs.ℓ_ext[2]
+
+    N₁ = inputs.N_ext[1]
+    N₂ = inputs.N_ext[2]
+
+    dx₁ = inputs.dx̄[1]
+    dx₂ = inputs.dx̄[2]
+
+    Σ₁,Σ₂ = σ(inputs)
+
+    ∇₁ = grad_1d(N₁-1,dx₁)
+    ∇₂ = grad_1d(N₂-1,dx₂)
+
+    s₁₁ = sparse(1:N₁-1,1:N₁-1,1./(1+.5im*(Σ₁[1:end-1] + Σ₁[2:end])/real(k)),N₁-1,N₁-1)
+    s₁₂ = sparse(1:N₁,1:N₁,1./(1+1im*(Σ₁)/real(k)),N₁,N₁)
+
+    s₂₁ = sparse(1:N₂-1,1:N₂-1,1./(1+.5im*(Σ₂[1:end-1] + Σ₂[2:end])/real(k)),N₂-1,N₂-1)
+    s₂₂ = sparse(1:N₂,1:N₂,1./(1+1im*(Σ₂)/real(k)),N₂,N₂)
+
+    ∇₁² = -(s₁₂*transpose(∇₁)*s₁₁*∇₁)
+    ∇₂² = -(s₂₂*transpose(∇₂)*s₂₁*∇₂)
+    ind = [1, N₁, 1, N₂, 1]
+
+    if any(inputs.bc .== "o")
+
+        if any(inputs.bc[1:2] .== "o") && !(bc[3:4]⊆["d", "n"])
+            error("Inconsistent boundary conditions. Cannot have an open side without Dirichlet/Neumann top and bottom.")
+        elseif any(inputs.bc[3:4] .== "o") && !(bc[1:2]⊆["d", "n"])
+            error("Inconsistent boundary conditions. Cannot have open top or bottom without Dirichlet sides.")
+        end
+
+        if any(inputs.bc[1:2] .== "o")
+            N⟂ = N₂
+            Φ = zeros(Complex128,N⟂,N⟂,2)
+            x⟂ = x₂ - ∂R[3]
+            ℓ⟂ = ℓ₂
+        else
+            N⟂ = N₁
+            Φ = zeros(Complex128,N⟂,N⟂,2)
+            x⟂ = x₁ - ∂R[1]
+            ℓ⟂ = ℓ₁
+        end
+
+        m_cutoff = 2*floor(Int,ℓ⟂*sqrt(real(k^2))/π)
+
+    end
+
+    for i in 1:4
+        if i ≤ 2
+            if bc[i] in ["O", "I"]
+                ∇₁²[ind[i],ind[i]]   += -2/dx₁^2
+            elseif bc[i] == "d"
+                ∇₁²[ind[i],ind[i]]   += -2/dx₁^2
+            elseif bc[i] == "n"
+                ∇₁²[ind[i],ind[i]]   += 0
+            elseif bc[i] == "p"
+                ∇₁²[ind[i],ind[i]]   += -1/dx₁^2
+                ∇₁²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓ₁*k₁)/dx₁^2
+            elseif bc[i] == "o"
+                for m in 1:m_cutoff
+                    if m in inputs.input_modes[i]
+                        M = +1
+                    else
+                        M = -1
+                    end
+                    k⟂ = M*sqrt(k^2 - (m*π/ℓ⟂)^2)
+                    Φ[:,:,i] += (1im*dx₁*dx₂/ℓ⟂)*k⟂*sin.(m*π*x⟂/ℓ⟂)*sin.(m*π*transpose(x⟂)/ℓ⟂)
+                end
+                Φ[:,:,i] = -(eye(Complex128,N⟂,N⟂)+Φ[:,:,i])\(Φ[:,:,i]*2/dx₁^2)
+            end
+        else
+            if bc[i] in ["O", "I"]
+                ∇₂²[ind[i],ind[i]]   += -2/dx₂^2
+            elseif bc[i] == "d"
+                ∇₂²[ind[i],ind[i]]   += -2/dx₂^2
+            elseif bc[i] == "n"
+                ∇₂²[ind[i],ind[i]]   += 0
+            elseif bc[i] == "p"
+                ∇₂²[ind[i],ind[i]]   += -1/dx₂^2
+                ∇₂²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓ₂*k₂)/dx₂^2
+            elseif bc[i] == "o"
+                for m in 1:m_cutoff
+                    if m in inputs.input_modes[i]
+                        M = +1
+                    else
+                        M = -1
+                    end
+                    k⟂ = M*sqrt(k^2 - (m*π/ℓ⟂)^2)
+                    Φ[:,:,i-2] += (1im*dx₁*dx₂/ℓ⟂)*k⟂*sin.(m*π*x⟂/ℓ⟂)*sin.(m*π*transpose(x⟂)/ℓ⟂)
+                end
+                Φ[:,:,i-2] = -(eye(Complex128,N⟂,N⟂)+Φ[:,:,i-2])\(Φ[:,:,i-2]*2/dx₂^2)
+            end
+        end
+    end
+
+    if !any(inputs.bc .== "o")
+        ∇² = kron(speye(N₂,N₂),∇₁²) + kron(∇₂²,speye(N₁,N₁))
+    elseif any(inputs.bc[1:2] .== "o")
+        ( ∇² = kron(speye(N₂,N₂),∇₁²) + kron(∇₂²,speye(N₁,N₁)) + kron(Φ[:,:,1],
+            sparse([1],[1],[1],N₁,N₁)) + kron(Φ[:,:,2],sparse([N₁],[N₁],[1],N₁,N₁)) )
+    elseif any(inputs.bc[3:4] .== "o")
+        ( ∇² = kron(speye(N₂,N₂),∇₁²) + kron(∇₂²,speye(N₁,N₁)) +
+            kron(sparse([1],[1],[1],N₂,N₂),Φ[:,:,1]) +
+            kron(sparse([N₂],[N₂],[1],N₂,N₂),Φ[:,:,2]) )
+    end
+
+    return ∇²
+end # end of function laplacian
+
+
+"""
+s₁, s₂ = σ(inputs)
+
+    Computes conductivity for PML layer in dimensions 1 and 2.
+"""
+function σ(inputs::InputStruct)::Tuple{Array{Complex128,1},Array{Complex128,1}}
+
+    ####################
+    PML_extinction = 1e3
+    PML_ρ = 1/3
+    PML_power_law = 2
+    α_imag = -.25
+    ####################
+
+    x₁ = inputs.x₁_ext
+    x₂ = inputs.x₂_ext
+    ∂R = inputs.∂R_ext
+
+    dx₁ = inputs.dx̄[1]
+    dx₂ = inputs.dx̄[2]
+
+
+    α = zeros(Complex128,4)
+    for i in 1:4
+        if inputs.bc[i] == "O"
+            ( α[i] = +(1+α_imag*1im)*( (PML_ρ/dx₁)^(PML_power_law+1) )/
+                ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law )
+        elseif inputs.bc[i] == "I"
+            ( α[i] = -(1+α_imag*1im)*( (PML_ρ/dx₂)^(PML_power_law+1) )/
+                ( (PML_power_law+1)*log(PML_extinction) )^PML_power_law )
+        else
+            α[i] = 0
+        end
+    end
+
+    s₁ = zeros(Complex128,length(x₁))
+    s₂ = zeros(Complex128,length(x₂))
+
+    for i in 1:length(x₁)
+        if ∂R[1] ≤ x₁[i] ≤ ∂R[5]
+            s₁[i] = α[1]*abs(x₁[i]-∂R[5])^PML_power_law
+        elseif ∂R[6] ≤ x₁[i] ≤ ∂R[2]
+            s₁[i] = α[2]*abs(x₁[i]-∂R[6])^PML_power_law
+        end
+    end
+
+    for j in 1:length(x₂)
+        if ∂R[3] ≤ x₂[j] ≤ ∂R[7]
+            s₂[j] = α[3]*abs(x₂[j]-∂R[7])^PML_power_law
+        elseif ∂R[8] ≤ x₂[j] ≤ ∂R[4]
+            s₂[j] = α[4]*abs(x₂[j]-∂R[8])^PML_power_law
+        end
+    end
+
+    return s₁,s₂
+end # end of function σ
+
+
+"""
+r = whichRegion(xy, ∂R, geometry, geoParams)
+
+    r is an array.
+
+    xy = (x, y).
+"""
+function whichRegion(xy::Tuple{Array{Float64,1},Array{Float64,1}}, ∂R::Array{Float64,1},
+    geometry::Function, geoParams::Array{Float64,1})::Array{Int,2}
+
+    x = xy[1]
+    y = xy[2]
+
+    region = zeros(Int,length(x),length(y))
+
+    for i in 1:length(x), j in 1:length(y)
+
+        region[i,j] = 8 + geometry(x[i], y[j], geoParams)
+
+        if region[i,j] == 9
+            if ∂R[1] ≤ x[i] ≤ ∂R[5]
+                if ∂R[8] ≤ y[j] ≤ ∂R[4]
+                    region[i,j] = 1
+                elseif ∂R[3] ≤ y[j] ≤ ∂R[7]
+                    region[i,j] = 7
+                elseif ∂R[7] ≤ y[j] ≤ ∂R[8]
+                    region[i,j] = 8
+                end
+            elseif ∂R[5] ≤ x[i] ≤ ∂R[6]
+                if ∂R[8] ≤ y[j] ≤ ∂R[4]
+                    region[i,j] = 2
+                elseif ∂R[3] ≤ y[j] ≤ ∂R[7]
+                    region[i,j] = 6
+                end
+            elseif ∂R[6] ≤ x[i] ≤ ∂R[2]
+                if ∂R[8] ≤ y[j] ≤ ∂R[4]
+                    region[i,j] = 3
+                elseif ∂R[3] ≤ y[j] ≤ ∂R[7]
+                    region[i,j] = 5
+                elseif ∂R[7] ≤ y[j] ≤ ∂R[8]
+                    region[i,j] = 4
+                end
+            end
+        end
+
+    end
+
+    return region
+end # end of function whichRegion
+
+
+"""
+ε_sm, F_sm = subPixelSmoothing_core(XY, XY_ext, ∂R, ε, F, subPixelNum, truncate,
+    r, geometry, geoParams)
+
+    XY = (x,y)
+    XY_ext = (x_ext, y_ext)
+"""
+function ( subPixelSmoothing_core(XY::Tuple{Array{Float64,1}, Array{Float64,1}},
+    XY_ext::Tuple{Array{Float64,1}, Array{Float64,1}}, ∂R::Array{Float64,1},
+    ɛ::Array{Complex128,1}, F::Array{Float64,1}, subPixelNum::Int,
+    truncate::Bool, r::Array{Int,2}, geometry::Function, geoParams::Array{Float64,1})::
+    Tuple{Array{Complex128,2},Array{Float64,2},Array{Int,2}} )
+
+    if truncate
+        xy = XY
+    else
+        xy = XY_ext
+    end
+
+    if isempty(r)
+        r = whichRegion(xy, ∂R, geometry, geoParams)
+    end
+
+    ɛ_smoothed = deepcopy(ɛ[r])
+    F_smoothed = deepcopy(F[r])
+
+    for i in 2:(length(xy[1])-1), j in 2:(length(xy[2])-1)
+
+        ( nearestNeighborFlag = (r[i,j]!==r[i,j+1]) | (r[i,j]!==r[i,j-1]) |
+            (r[i,j]!==r[i+1,j]) | (r[i,j]!==r[i-1,j]) )
+
+        ( nextNearestNeighborFlag = (r[i,j]!==r[i+1,j+1]) |
+            (r[i,j]!==r[i-1,j-1]) | (r[i,j]!==r[i+1,j-1]) | (r[i,j]!==r[i-1,j+1]) )
+
+        if nearestNeighborFlag | nextNearestNeighborFlag
+
+            x_min = (xy[1][i]+xy[1][i-1])/2
+            y_min = (xy[2][j]+xy[2][j-1])/2
+
+            x_max = (xy[1][i]+xy[1][i+1])/2
+            y_max = (xy[2][j]+xy[2][j+1])/2
+
+            X = Array(linspace(x_min,x_max,subPixelNum))
+            Y = Array(linspace(y_min,y_max,subPixelNum))
+
+            subRegion = whichRegion((X,Y), ∂R, geometry, geoParams)
+            ɛ_smoothed[i,j] = mean(ɛ[subRegion])
+            F_smoothed[i,j] = mean(F[subRegion])
+
+        end
+
+    end
+
+    return ɛ_smoothed, F_smoothed, r
+end # end of function subpixelSmoothing_core
+
+
+"""
+ε_sm, F_sm = subPixelSmoothing(inputs; truncate = false)
+"""
+function subPixelSmoothing(inputs::InputStruct; truncate::Bool = false)::
+    Tuple{Array{Complex{Float64},2}, Array{Float64,2},Array{Int,2}}
+
+    XY = (inputs.x₁, inputs.x₂)
+    XY_ext = (inputs.x₁_ext, inputs.x₂_ext)
+
+    ɛ_smoothed, F_smoothed, r = subPixelSmoothing_core(XY, XY_ext, inputs.∂R_ext,
+        inputs.ɛ_ext, inputs.F_ext, inputs.subPixelNum, truncate, inputs.r_ext,
+        inputs.geometry, inputs.geoParams)
+
+    return ɛ_smoothed, F_smoothed, r
+end # end of function subpixelSmoothing
+
+
+"""
+∫z_dx = trapz(z, dx̄)
+"""
+function trapz(z::Array{Complex128,1},dx̄::Array{Float64,1})::Complex128
+
+    ∫z_dx = prod(dx̄)*sum(z) # may have to address boundary terms later
+
+    return ∫z_dx
+end # end of function trapz
+
+
+"""
+loadGeometry(fileName = "./SALT_2d_Geometry.jl")
+"""
+function loadGeometry(;fileName::String = "./SALT_2d_Geometry.jl")::Function
+    geometry = evalfile(fileName)
+end # end of function loadGeometry
+
+
+"""
+processInputs(fileName = "./SALT_2d_Inputs.jl")
+"""
+function processInputs(geometry::Function; fileName::String = "./SALT_2d_Inputs.jl")::InputStruct
+
+    ################
+    F_min = 1e-15
+    PML_extinction = 1e3
+    PML_ρ = 1/3
+    PML_power_law = 2
+    #################
+
+    coord::String, N::Array{Int,1}, k₀::Complex128, k::Array{Complex128,1}, ∂R::Array{Float64,1}, bc::Array{String,1}, bk::Array{Complex128,1}, input_modes::Array{Array{Int64,1},1}, F::Array{Float64,1}, ɛ::Array{Complex128,1}, γ⟂::Float64, D₀::Float64, a::Array{Complex128,1}, geoParams::Array{Float64,1}, incidentWaveRegions::Array{Int,1}, scatteringRegions::Array{Int,1}, nChannels::Int, subPixelNum::Int = evalfile(fileName)
+
+    ω₀ = k₀
+    ω  = k
+
+    ℓ = [∂R[2] - ∂R[1], ∂R[4] - ∂R[3]]
+
+    dx₁ = ℓ[1]/N[1]
+    dx₂ = ℓ[2]/N[2]
+    dx̄ = [dx₁, dx₂]
+
+    fix_bc!(bc)
+
+    dN = Int[0, 0, 0, 0]
+    for i in 1:4
+        if bc[i] in ["O", "I"]
+            dN[i] = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
+        elseif bc[i] == "d"
+            dN[i] = 0
+        elseif bc[i] == "n"
+            dN[i] = 0
+        elseif bc[i] == "o"
+            dN[i] = 0
+        elseif bc[i] == "p"
+            dN[i] = 0
+        end
+    end
+
+    N₁_ext = N[1] + dN[1] + dN[2]
+    ℓ₁_ext = dx₁*N₁_ext
+    x₁_ext::Array{Float64,1} = ∂R[1] + dx₁*(1/2-dN[1]) + dx₁*(0:N₁_ext-1)
+    x₁_inds = dN[1] + collect(1:N[1])
+    x₁ = x₁_ext[x₁_inds]
+
+    N₂_ext = N[2] + dN[3] + dN[4]
+    ℓ₂_ext = dx₂*N₂_ext
+    x₂_ext::Array{Float64,1} = ∂R[3] + dx₂*(1/2-dN[3]) + dx₂*(0:N₂_ext-1)
+    x₂_inds = dN[3] + collect(1:N[2])
+    x₂ = x₂_ext[x₂_inds]
+
+    N_ext = [N₁_ext, N₂_ext]
+    ℓ_ext = [ℓ₁_ext, ℓ₂_ext]
+    x̄_ext = (reshape(repmat(x₁_ext,1,N_ext[2]),:), reshape(repmat(x₂_ext',N_ext[1],1),:))
+    x̄_inds = reshape( repmat(x₁_inds,1,N[2]) + repmat(N₁_ext*(x₂_inds-1)',N[1],1) ,:)
+    x̄ = (x̄_ext[1][x̄_inds],x̄_ext[2][x̄_inds])
+
+    ∂R_ext = vcat([x₁_ext[1]-dx₁/2], [x₁_ext[end]+dx₁/2], [x₂_ext[1]-dx₂/2], [x₂_ext[end]+dx₂/2], ∂R)
+
+    F[iszero.(F)] = F_min
+    F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F)
+    ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], ɛ)
+
+    ɛ_sm, F_sm, r_ext = subPixelSmoothing_core( (x₁, x₂), (x₁_ext, x₂_ext),
+        ∂R_ext, ɛ_ext, F_ext, subPixelNum, false, [Int[] Int[]], geometry, geoParams)
+
+    inputs = InputStruct(coord, N, N_ext, ℓ, ℓ_ext, dx̄, x̄, x̄_ext, x̄_inds, x₁,
+        x₁_ext, x₁_inds, x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, r_ext, ɛ, ɛ_ext, ɛ_sm, F,
+        F_ext, F_sm, ω, ω₀, k, k₀, γ⟂, D₀, a, bc, prod(bc), bk, input_modes, subPixelNum,
+        geometry, geoParams, scatteringRegions, incidentWaveRegions, nChannels)
+
+    return inputs
+end # end of function processInputs
+
+
+"""
+inputs = updateInputs(inputs)
+
+    If changes were made to the ∂R, N, k₀, k, F, ɛ, Γ, bc, a, b, run updateInputs to
+    propagate these changes through the system.
+"""
+function updateInputs!(inputs::InputStruct, field::Symbol, value::Any)::InputStruct
+
+    ######
+    F_min = 1e-15
+    PML_extinction = 1e3
+    PML_ρ = 1/3
+    PML_power_law = 2
+    ######
+
+    setfield!(inputs,field,value)
+
+    if field == :ω₀
+        inputs.k₀ = inputs.ω₀
+    elseif field == :k₀
+        inputs.ω₀ = inputs.k₀
+    elseif field == :ω
+        inputs.k = inputs.ω
+    elseif field == :k
+        inputs.ω = inputs.k
+    end
+
+    if field in [:∂R, :N, :bc]
+        ∂R = inputs.∂R
+        N = inputs.N
+        fix_bc!(inputs.bc)
+        bc = inputs.bc
+        inputs.bc_sig = prod(bc)
+
+        ℓ = [∂R[2] - ∂R[1], ∂R[4] - ∂R[3]]
+
+        dx₁ = ℓ[1]/N[1]
+        dx₂ = ℓ[2]/N[2]
+        dx̄ = [dx₁, dx₂]
+
+        dN = Int[0, 0, 0, 0]
+        for i in 1:4
+            if bc[i] in ["O", "I"]
+                dN[i] = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
+            elseif bc[i] == "d"
+                dN[i] = 0
+            elseif bc[i] == "n"
+                dN[i] = 0
+            elseif bc[i] == "o"
+                dN[i] = 0
+            elseif bc[i] == "p"
+                dN[i] = 0
+            end
+        end
+
+        N₁_ext = N[1] + dN[1] + dN[2]
+        ℓ₁_ext = dx₁*N₁_ext
+        x₁_ext::Array{Float64,1} = ∂R[1] + dx₁*(1/2-dN[1]) + dx₁*(0:N₁_ext-1)
+        x₁_inds = dN[1] + collect(1:N[1])
+        x₁ = x₁_ext[x₁_inds]
+
+        N₂_ext = N[2] + dN[3] + dN[4]
+        ℓ₂_ext = dx₂*N₂_ext
+        x₂_ext::Array{Float64,1} = ∂R[3] + dx₂*(1/2-dN[3]) + dx₂*(0:N₂_ext-1)
+        x₂_inds = dN[3] + collect(1:N[2])
+        x₂ = x₂_ext[x₂_inds]
+
+        N_ext = [N₁_ext, N₂_ext]
+        ℓ_ext = [ℓ₁_ext, ℓ₂_ext]
+        x̄_ext = (reshape(repmat(x₁_ext,1,N_ext[2]),:), reshape(repmat(x₂_ext',N_ext[1],1),:))
+        x̄_inds = reshape( repmat(x₁_inds,1,N[2]) + repmat(N₁_ext*(x₂_inds-1)',N[1],1) ,:)
+        x̄ = (x̄_ext[1][x̄_inds],x̄_ext[2][x̄_inds])
+
+        ∂R_ext = vcat([x₁_ext[1]-dx₁/2], [x₁_ext[end]+dx₁/2],
+            [x₂_ext[1]-dx₂/2], [x₂_ext[end]+dx₂/2], ∂R)
+
+        inputs.N_ext = N_ext
+        inputs.ℓ = ℓ
+        inputs.ℓ_ext = ℓ_ext
+        inputs.dx̄ = dx̄
+        inputs.x̄ = x̄
+        inputs.x̄_ext = x̄_ext
+        inputs.x̄_inds = x̄_inds
+        inputs.x₁ = x₁
+        inputs.x₁_ext = x₁_ext
+        inputs.x₁_inds = x₁_inds
+        inputs.x₂ = x₂
+        inputs.x₂_ext = x₂_ext
+        inputs.x₂_inds = x₂_inds
+        inputs.∂R = ∂R
+        inputs.∂R_ext = ∂R_ext
+
+    end
+
+    if  field in [:∂R, :N, :bc, :F, :ε, :subPixelNum, :geoParams]
+
+        F = inputs.F
+        ɛ = inputs.ɛ
+
+        F[iszero.(F)] = F_min
+        F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F)
+
+        ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], ɛ)
+
+        ɛ_sm, F_sm, r_ext = subPixelSmoothing_core( (inputs.x₁, inputs.x₂),
+            (inputs.x₁_ext, inputs.x₂_ext), inputs.∂R_ext, ɛ_ext, F_ext,
+            inputs.subPixelNum, false, [Int[] Int[]], inputs.geometry, inputs.geoParams)
+
+        inputs.F_ext = F_ext
+        inputs.r_ext = r_ext
+        inputs.ɛ_sm = ɛ_sm
+        inputs.F_sm = F_sm
+
+    end
+
+    return inputs
+end # end of function updateInputs
+
+
+"""
+γ(k,inputs) is the lorentzian gain curve
+"""
+function γ(k::Complex128, inputs::InputStruct)::Complex128
+    return inputs.γ⟂./(k-inputs.k₀+1im*inputs.γ⟂)
+end
+
+
+"""
+fix_bc!(bc)
+"""
+function fix_bc!(bc::Array{String,1})::Array{String,1}
+    for i in 1:4
+        if bc[i] in ["pml_out", "PML_out"]
+            bc[i] = "O"
+        elseif bc[i] in ["pml_in", "PML_in"]
+            bc[i] = "I"
+        elseif bc[i] in ["d", "dirichlet", "Dirichlet", "hard", "h"]
+            bc[i] = "d"
+        elseif bc[i] in ["n", "neumann",   "Neumann",   "soft", "s"]
+            bc[i] = "n"
+        elseif bc[i] in ["o", "open", "Open"]
+            bc[i] = "o"
+        elseif bc[i] in ["p", "periodic", "Periodic"]
+            bc[i] = "p"
+        end
+    end
+    return bc
+end
+
+
+"""
+inputs = open_to_pml_out(inputs)
+
+    converts "open" or "pml_in" to "pml_out", and creates a copy of inputs if it does so.
+"""
+function open_to_pml_out(inputs1::InputStruct)::InputStruct
+    if any(inputs1.bc .== "o") || any(inputs1.bc .== "I")
+        inputs = deepcopy(inputs1)
+        for i in 1:4
+            if inputs.bc[i] in ["o", "I"]
+                inputs.bc[i] = "pml_out"
+                updateInputs!(inputs, :bc, inputs.bc)
+            end
+        end
+    else
+        inputs = inputs1
+    end
+    return inputs
+end
+
+
+"""
+inputs = open_to_pml_in(inputs)
+
+    converts "open" or "pml_out" to "pml_in", and creates a copy of inputs if it does so.
+"""
+function open_to_pml_in(inputs1::InputStruct)::InputStruct
+    if any(inputs1.bc .== "o") || any(inputs1.bc .== "O")
+        inputs = deepcopy(inputs1)
+        for i in 1:4
+            if inputs.bc[i] in ["o", "O"]
+                inputs.bc[i] = "pml_in"
+                updateInputs!(inputs, :bc, inputs.bc)
+            end
+        end
+    else
+        inputs = inputs1
+    end
+    return inputs
+end
