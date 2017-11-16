@@ -10,7 +10,6 @@ using SALT_1d.Core
 """
 k = computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nks=3, F=[1.], R_min = .01, rank_tol = 1e-8)
 """
-
 function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nks=3, F=[1.], R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
        
@@ -142,6 +141,7 @@ end
 
 
 
+
 """
 k = computeZero_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nzs=3, F=[1.], R_min = .01,
 """
@@ -157,6 +157,7 @@ function computeZero_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Re
     
 end
 # end of function computeZero_NL2_parallel
+
 
 
 
@@ -190,6 +191,8 @@ end
 
 """
 S,r = computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, fileName = "")
+
+Use S_wait(r) to wait for the result to compute.
 """
 function computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true, fileName = "")
     # N is the number of steps to go from D0 = 0 to given D0 or a=0 to a, whichever is specified in N_Type
@@ -220,6 +223,15 @@ end
 
 """
 computeS_parallel!(S::SharedArray,inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true)
+
+Computes S in-place, where S is created by 
+
+S = SharedArray(Complex128,(2,2,length(inputs["k"]),N), pids=workers())
+
+OR
+
+S = SharedArray(abspath(fileName),Complex128,(2,2,length(inputs["k"]),N), pids=workers(), mode="w+")
+
 """
 function computeS_parallel!(S::SharedArray,inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true)
 # N is the number of steps to go from D0 = 0 to given D0 or a=0 to a
