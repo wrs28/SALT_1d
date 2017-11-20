@@ -244,7 +244,7 @@ k, ψ, η, conv = computePole_NL1(inputs, k_init; F=[1.], dispOpt=false, η_init
     max_count: the max number of CF states to compute at a time.
     max_iter: maximum number of iterations to include in nonlinear solve
 """
-function computePole_NL1(inputs::InputStruct, k_init::Union{Complex128,Float64,Int}; F::Array{Float64,1}=[1.],
+function computePole_NL1(inputs1::InputStruct, k_init::Union{Complex128,Float64,Int}; F::Array{Float64,1}=[1.],
     dispOpt::Bool=false, η_init::Complex128=complex(0.),
     u_init::Array{Complex128,1}=Complex128[],
     k_avoid::Array{Complex128,1}=Complex128[0], tol::Float64=.5, max_count::Int=15,
@@ -266,7 +266,7 @@ k, ψ, η, conv = computeZero_NL1(inputs, k_init;F=[1.], dispOpt=false, η_init=
     max_count: the max number of CF states to compute at a time.
     max_iter: maximum number of iterations to include in nonlinear solve
 """
-function computeZero_NL1(inputs::InputStruct, k_init::Union{Complex128,Float64,Int}; F::Array{Float64,1}=[1.],
+function computeZero_NL1(inputs1::InputStruct, k_init::Union{Complex128,Float64,Int}; F::Array{Float64,1}=[1.],
     dispOpt::Bool=false, η_init::Complex128=complex(0.),
     u_init::Array{Complex128,1}=Complex128[],
     k_avoid::Array{Complex128,1}=Complex128[0], tol::Float64=.5, max_count::Int=15,
@@ -291,7 +291,7 @@ k, ψ, η, conv = computeUZR_NL1(inputs,k_init;F=[1.],dispOpt=false,η_init = 0.
     max_count: the max number of CF states to compute at a time.
     max_iter: maximum number of iterations to include in nonlinear solve
 """
-function computeUZR_NL1(inputs::InputStruct, k_init::Union{Complex128,Float64,Int}; F::Array{Float64,1}=[1.],
+function computeUZR_NL1(inputs1::InputStruct, k_init::Union{Complex128,Float64,Int}; F::Array{Float64,1}=[1.],
     dispOpt::Bool=false, η_init::Complex128=complex(0.),
     u_init::Array{Complex128,1}=Complex128[], k_avoid::Array{Complex128,1}=Complex128[0],
     tol::Float64=.5, max_count::Int=15, max_iter::Int=50,
@@ -430,7 +430,7 @@ computePole_NL2(inputs, kc, Radii; np=3, Nq=100, F=[1.], R_min=.01, rank_tol=1e-
 
     Nq is the number of contour quadrature points.
 """
-function computePole_NL2(inputs::InputStruct, kc::Union{Complex128,Float64,Int},
+function computePole_NL2(inputs1::InputStruct, kc::Union{Complex128,Float64,Int},
     Radii::Tuple{Float64,Float64}; np::Int=3, Nq::Int=100, F::Array{Float64,1}=[1.],
     R_min::Float64=.01, rank_tol::Float64=1e-8)::Array{Complex{Float64},1}
 
@@ -451,7 +451,7 @@ computeZero_NL2(inputs, kc, Radii; nz=3, Nq=100, F=[1.], R_min=.01, rank_tol=1e-
 
     Nq is the number of contour quadrature points.
 """
-function computeZero_NL2(inputs::InputStruct, kc::Union{Complex128,Float64,Int},
+function computeZero_NL2(inputs1::InputStruct, kc::Union{Complex128,Float64,Int},
     Radii::Tuple{Float64,Float64}; nz::Int=3, Nq::Int=100, F::Array{Float64,1}=[1.],
     R_min::Float64=.01, rank_tol::Float64=1e-8)::Array{Complex{Float64},1}
 
@@ -475,7 +475,7 @@ computeUZR_NL2(inputs, kc, Radii; nz=3, Nq=100, F=[1.], R_min=.01, rank_tol=1e-8
     If direction[1] = +1, have right-going. If -1, left-going. If 0, leave bc's
     as indicated in inputs.
 """
-function computeUZR_NL2(inputs::InputStruct, kc::Union{Complex128,Float64,Int},
+function computeUZR_NL2(inputs1::InputStruct, kc::Union{Complex128,Float64,Int},
     Radii::Tuple{Float64,Float64}; nu::Int=3, Nq::Int=100, F::Array{Float64,1}=[1.],
     R_min::Float64=.01, rank_tol::Float64=1e-8,
     direction::Array{Int,1}=[1,0])::Array{Complex{Float64},1}
