@@ -436,7 +436,7 @@ function computePole_NL2(inputs1::InputStruct, kc::Union{Complex128,Float64,Int}
 
     inputs = open_to_pml_out(inputs1)
 
-    k = computeK_NL2(inputs, kc, Radii; np=nk, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
+    k = computeK_NL2(inputs, kc, Radii; nk=np, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
 end # end of function computePole_NL2
 
 
@@ -457,7 +457,7 @@ function computeZero_NL2(inputs1::InputStruct, kc::Union{Complex128,Float64,Int}
 
     inputs = open_to_pml_in(inputs1)
 
-    k = computeK_NL2(inputs, kc, Radii; nz=nk, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
+    k = computeK_NL2(inputs, kc, Radii; nk=nz, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
 end # end of function computeZero_NL2
 
 
@@ -493,7 +493,7 @@ function computeUZR_NL2(inputs1::InputStruct, kc::Union{Complex128,Float64,Int},
         updateInputs!(inputs, :bc, [inputs.bc[1], inputs.bc[2], "pml_out", "pml_in"])
     end
 
-    k = computeK_NL2(inputs, kc, Radii; nu=nk, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
+    k = computeK_NL2(inputs, kc, Radii; nk=nu, Nq=Nq, F=F, R_min=R_min, rank_tol=rank_tol)
 end # end of function computeUZR_NL2
 
 
