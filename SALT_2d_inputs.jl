@@ -14,9 +14,9 @@
 end
 
 n = 2.
-F = [0., 0.]
-n₁ = [ 1.,  n].^2
-n₂ = [ 0., 0.].^2
+n₁ = [ 1.,  n]
+n₂ = [ 0., 0.]
+F = [0.0, 0.0, 0.0]
 
 scatteringRegions = [2]
 geoParams = Float64[.41]

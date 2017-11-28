@@ -532,7 +532,7 @@ function processInputs(
 
     F[iszero.(F)] = F_min
     F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F_min*ones(size(wge)), F)
-    ε = n₁ + 1.0im*n₂
+    ε = (n₁ + 1.0im*n₂).^2
     ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wge, ɛ)
 
     ɛ_sm, F_sm, r_ext = subPixelSmoothing_core( (x₁, x₂), (x₁_ext, x₂_ext),
