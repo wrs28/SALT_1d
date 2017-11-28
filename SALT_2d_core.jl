@@ -1,38 +1,49 @@
 """
-inputs = Inputs(coord, N, N_ext, ℓ, ℓ_ext, dx̄, x̄, x̄_ext, x̄_inds, x₁, x₁_ext,
-    x₁_inds x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, r_ext, ɛ, ɛ_ext, ɛ_sm, F, F_ext, F_sm,
-    ω, ω₀, k, k₀, γ⟂, D₀, a, bc, bc_sig, bk, input_modes, subPixelNum, geometry,
-    geoParams, scatteringRegions, incidentWaveRegions, nChannels,
-    channelBoundaries)
+inc = ChannelStruct(wg, side, tqn)
+"""
+mutable struct ChannelStruct
+    wg::Int         # waveguide number
+    side::String    # side
+    tqn::Int        # transverse quantum number
+end
+
+
+"""
+inputs = Inputs(coord, N, N_ext, ℓ, ℓ_ext, x̄, x̄_ext, x̄_inds, dx̄, x₁, x₁_ext, x₁_inds,
+    x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, r, r_ext, ɛ, ɛ_ext, ɛ_sm, F, F_ext, F_sm, ω,
+    ω₀, k, k₀, γ⟂, D₀, a, bc, bc_sig, bk, input_modes, scatteringRegions,
+    incidentWaveRegions, channels, geometry, geoParams, subPixelNum)
 """
 mutable struct InputStruct
-    coord::String
-    N::Array{Int,1}
-    N_ext::Array{Int,1}
-    ℓ::Array{Float64,1}
-    ℓ_ext::Array{Float64,1}
-    dx̄::Array{Float64,1}
+    coord::String       # coordinate frame (xy or polar)
+    N::Array{Int,1}     # number of pixels in each dimension
+    N_ext::Array{Int,1} # number of pixels of extended problem in each dimension
+    ℓ::Array{Float64,1} # dimensions of domain
+    ℓ_ext::Array{Float64,1} #dimensions of extended domain
     x̄::Tuple{Array{Float64,1},Array{Float64,1}}
     x̄_ext::Tuple{Array{Float64,1},Array{Float64,1}}
     x̄_inds::Array{Int,1}
+    dx̄::Array{Float64,1}
     x₁::Array{Float64,1}
     x₁_ext::Array{Float64,1}
     x₁_inds::Array{Int,1}
     x₂::Array{Float64,1}
     x₂_ext::Array{Float64,1}
     x₂_inds::Array{Int,1}
-    ∂R::Array{Float64,1}
-    ∂R_ext::Array{Float64,1}
+    ∂R::Array{Float64,1}    # domain boundary
+    ∂R_ext::Array{Float64,1}# extended domain boundary
+    ∂S::Array{Float64,1}    # surface of last scattering
+    r::Array{Int,2}
     r_ext::Array{Int,2}
-    ɛ::Array{Complex128,1}
-    ɛ_ext::Array{Complex128,1}
-    ɛ_sm::Array{Complex128,2}
+    n₁::Array{Float64,1}    # real part of index for each region
+    n₂::Array{Float64,1}    # imag part of index for each region
+    ɛ::Array{Complex128,1}  # dielectric in each region
+    ɛ_ext::Array{Complex128,1}  # dielectric in extended regions
+    ɛ_sm::Array{Complex128,2}   # smoothed dielectric in extended regions
     F::Array{Float64,1}
     F_ext::Array{Float64,1}
     F_sm::Array{Float64,2}
-    ω::Array{Complex128,1}
     ω₀::Complex128
-    k::Array{Complex128,1}
     k₀::Complex128
     γ⟂::Float64
     D₀::Float64
@@ -41,12 +52,15 @@ mutable struct InputStruct
     bc_sig::String
     bk::Array{Complex128,1}
     input_modes::Array{Array{Int64,1},1}
-    subPixelNum::Int
+    scatteringRegions::Array{Int,1}
+    channels::Array{ChannelStruct,1}
     geometry::Function
     geoParams::Array{Float64,1}
-    scatteringRegions::Array{Int,1}
-    incidentWaveRegions::Array{Int,1}
-    nChannels::Int
+    wgd::Array{String,1}
+    wgp::Array{Float64,1}
+    wgt::Array{Float64,1}
+    wge::Array{Float64,1}
+    subPixelNum::Int
 end
 
 
@@ -79,8 +93,8 @@ end #end of function grad_1d
 
     sparse (∇₁[N,N],∇₂[N,N])
 """
-function ( grad(N::Array{Int,1}, dx̄::Array{Float64,1})::
-    Tuple{SparseMatrixCSC{Complex128,Int},SparseMatrixCSC{Complex128,Int}} )
+function grad(N::Array{Int,1}, dx̄::Array{Float64,1})::
+    Tuple{SparseMatrixCSC{Complex128,Int},SparseMatrixCSC{Complex128,Int}}
 
     N₁ = N[1]
     dx₁ = dx̄[1]
@@ -233,12 +247,7 @@ s₁, s₂ = σ(inputs)
 """
 function σ(inputs::InputStruct)::Tuple{Array{Complex128,1},Array{Complex128,1}}
 
-    ####################
-    PML_extinction = 1e3
-    PML_ρ = 1/3
-    PML_power_law = 2
-    α_imag = -.25
-    ####################
+    F_min, PML_extinction, PML_ρ, PML_power_law, α_imag = PML_params()
 
     x₁ = inputs.x₁_ext
     x₂ = inputs.x₂_ext
@@ -246,7 +255,6 @@ function σ(inputs::InputStruct)::Tuple{Array{Complex128,1},Array{Complex128,1}}
 
     dx₁ = inputs.dx̄[1]
     dx₂ = inputs.dx̄[2]
-
 
     α = zeros(Complex128,4)
     for i in 1:4
@@ -292,7 +300,8 @@ r = whichRegion(xy, ∂R, geometry, geoParams)
     xy = (x, y).
 """
 function whichRegion(xy::Tuple{Array{Float64,1},Array{Float64,1}}, ∂R::Array{Float64,1},
-    geometry::Function, geoParams::Array{Float64,1})::Array{Int,2}
+    geometry::Function, geoParams::Array{Float64,1}, wgd::Array{String,1},
+    wgp::Array{Float64,1}, wgt::Array{Float64,1})::Array{Int,2}
 
     x = xy[1]
     y = xy[2]
@@ -301,9 +310,22 @@ function whichRegion(xy::Tuple{Array{Float64,1},Array{Float64,1}}, ∂R::Array{F
 
     for i in 1:length(x), j in 1:length(y)
 
-        region[i,j] = 8 + geometry(x[i], y[j], geoParams)
+        region[i,j] = 8 + length(wgd) + geometry(x[i], y[j], geoParams)
 
-        if region[i,j] == 9
+        for w in 1:length(wgd)
+            if wgd[w] in ["x", "X"]
+                p = y[j]
+            elseif wgd[w] in ["y", "Y"]
+                p = x[i]
+            else
+                error("Invalid waveguide direction.")
+            end
+            if wgp[w]-wgt[w]/2 < p < wgp[w]+wgt[w]/2
+                region[i,j] = 8 + w
+            end
+        end
+
+        if region[i,j] == 8 + length(wgd) + 1
             if ∂R[1] ≤ x[i] ≤ ∂R[5]
                 if ∂R[8] ≤ y[j] ≤ ∂R[4]
                     region[i,j] = 1
@@ -342,11 +364,12 @@ end # end of function whichRegion
     XY = (x,y)
     XY_ext = (x_ext, y_ext)
 """
-function ( subPixelSmoothing_core(XY::Tuple{Array{Float64,1}, Array{Float64,1}},
+function subPixelSmoothing_core(XY::Tuple{Array{Float64,1}, Array{Float64,1}},
     XY_ext::Tuple{Array{Float64,1}, Array{Float64,1}}, ∂R::Array{Float64,1},
-    ɛ::Array{Complex128,1}, F::Array{Float64,1}, subPixelNum::Int,
-    truncate::Bool, r::Array{Int,2}, geometry::Function, geoParams::Array{Float64,1})::
-    Tuple{Array{Complex128,2},Array{Float64,2},Array{Int,2}} )
+    ɛ::Array{Complex{Float64},1}, F::Array{Float64,1}, subPixelNum::Int,
+    truncate::Bool, r::Array{Int,2}, geometry::Function, geoParams::Array{Float64,1},
+    wgd::Array{String,1}, wgp::Array{Float64,1}, wgt::Array{Float64,1})::
+    Tuple{Array{Complex128,2},Array{Float64,2},Array{Int,2}}
 
     if truncate
         xy = XY
@@ -355,7 +378,7 @@ function ( subPixelSmoothing_core(XY::Tuple{Array{Float64,1}, Array{Float64,1}},
     end
 
     if isempty(r)
-        r = whichRegion(xy, ∂R, geometry, geoParams)
+        r = whichRegion(xy, ∂R, geometry, geoParams, wgd, wgp, wgt)
     end
 
     ɛ_smoothed = deepcopy(ɛ[r])
@@ -380,7 +403,7 @@ function ( subPixelSmoothing_core(XY::Tuple{Array{Float64,1}, Array{Float64,1}},
             X = Array(linspace(x_min,x_max,subPixelNum))
             Y = Array(linspace(y_min,y_max,subPixelNum))
 
-            subRegion = whichRegion((X,Y), ∂R, geometry, geoParams)
+            subRegion = whichRegion((X,Y), ∂R, geometry, geoParams, wgd, wgp, wgt)
             ɛ_smoothed[i,j] = mean(ɛ[subRegion])
             F_smoothed[i,j] = mean(F[subRegion])
 
@@ -403,7 +426,7 @@ function subPixelSmoothing(inputs::InputStruct; truncate::Bool = false)::
 
     ɛ_smoothed, F_smoothed, r = subPixelSmoothing_core(XY, XY_ext, inputs.∂R_ext,
         inputs.ɛ_ext, inputs.F_ext, inputs.subPixelNum, truncate, inputs.r_ext,
-        inputs.geometry, inputs.geoParams)
+        inputs.geometry, inputs.geoParams, inputs.wgd, inputs.wgp, inputs.wgt)
 
     return ɛ_smoothed, F_smoothed, r
 end # end of function subpixelSmoothing
@@ -412,7 +435,7 @@ end # end of function subpixelSmoothing
 """
 ∫z_dx = trapz(z, dx̄)
 """
-function trapz(z::Array{Complex128,1},dx̄::Array{Float64,1})::Complex128
+function trapz(z::Array{Complex128,1}, dx̄::Array{Float64,1})::Complex128
 
     ∫z_dx = prod(dx̄)*sum(z) # may have to address boundary terms later
 
@@ -421,29 +444,48 @@ end # end of function trapz
 
 
 """
-loadGeometry(fileName = "./SALT_2d_Geometry.jl")
+processInputs(k₀, k, bc, F, n₁, n₂, a, scatteringRegions, incidentWaveRegions,
+    channels, geometry, geoParams;
+    coord="xy", N=[300,300], ∂R=[-.5,.5,-.5,.5], D₀=0., γ⟂=1e8, bk=[0.,0.],
+    input_modes=[[],[]], subPixelNum=10)
 """
-function loadGeometry(;fileName::String = "./SALT_2d_Geometry.jl")::Function
-    geometry = evalfile(fileName)
-end # end of function loadGeometry
+function processInputs(
+    geometry::Function,
+    geoParams::Array{Float64,1},
+    n₁::Array{Float64,1},
+    n₂::Array{Float64,1},
+    scatteringRegions::Array{Int,1},
+    wgd::Array{String,1},
+    wgp::Array{Float64,1},
+    wgt::Array{Float64,1},
+    wge::Array{Float64,1},
 
+    F::Array{Float64,1},
+    D₀::Float64,
+    k₀::Complex128,
+    γ⟂::Float64,
 
-"""
-processInputs(fileName = "./SALT_2d_Inputs.jl")
-"""
-function processInputs(geometry::Function; fileName::String = "./SALT_2d_Inputs.jl")::InputStruct
+    ∂R::Array{Float64,1},
+    bc::Array{String,1},
+    bk::Array{Complex{Float64},1},
+    input_modes::Array{Array{Int,1},1},
 
-    ################
-    F_min = 1e-15
-    PML_extinction = 1e3
-    PML_ρ = 1/3
-    PML_power_law = 2
-    #################
+    ∂S::Array{Float64,1},
+    channels::Array{ChannelStruct,1},
+    a::Array{Complex128,1},
 
-    coord::String, N::Array{Int,1}, k₀::Complex128, k::Array{Complex128,1}, ∂R::Array{Float64,1}, bc::Array{String,1}, bk::Array{Complex128,1}, input_modes::Array{Array{Int64,1},1}, F::Array{Float64,1}, ɛ::Array{Complex128,1}, γ⟂::Float64, D₀::Float64, a::Array{Complex128,1}, geoParams::Array{Float64,1}, incidentWaveRegions::Array{Int,1}, scatteringRegions::Array{Int,1}, nChannels::Int, subPixelNum::Int = evalfile(fileName)
+    coord::String,
+    N::Array{Int,1},
+    subPixelNum::Int
+    )::InputStruct
+
+    if !(length(wgd)==length(wgp)==length(wgt)==length(wge))
+        error("Waveguide parameters have different lengths.")
+    end
+
+    F_min, PML_extinction, PML_ρ, PML_power_law, α_imag = PML_params()
 
     ω₀ = k₀
-    ω  = k
 
     ℓ = [∂R[2] - ∂R[1], ∂R[4] - ∂R[3]]
 
@@ -489,16 +531,20 @@ function processInputs(geometry::Function; fileName::String = "./SALT_2d_Inputs.
     ∂R_ext = vcat([x₁_ext[1]-dx₁/2], [x₁_ext[end]+dx₁/2], [x₂_ext[1]-dx₂/2], [x₂_ext[end]+dx₂/2], ∂R)
 
     F[iszero.(F)] = F_min
-    F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F)
-    ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], ɛ)
+    F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F_min*ones(size(wge)), F)
+    ε = n₁ + 1.0im*n₂
+    ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wge, ɛ)
 
     ɛ_sm, F_sm, r_ext = subPixelSmoothing_core( (x₁, x₂), (x₁_ext, x₂_ext),
-        ∂R_ext, ɛ_ext, F_ext, subPixelNum, false, [Int[] Int[]], geometry, geoParams)
+        ∂R_ext, ɛ_ext, F_ext, subPixelNum, false, [Int[] Int[]], geometry, geoParams,
+        wgd, wgp, wgt)
 
-    inputs = InputStruct(coord, N, N_ext, ℓ, ℓ_ext, dx̄, x̄, x̄_ext, x̄_inds, x₁,
-        x₁_ext, x₁_inds, x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, r_ext, ɛ, ɛ_ext, ɛ_sm, F,
-        F_ext, F_sm, ω, ω₀, k, k₀, γ⟂, D₀, a, bc, prod(bc), bk, input_modes, subPixelNum,
-        geometry, geoParams, scatteringRegions, incidentWaveRegions, nChannels)
+    r = reshape(r_ext[x̄_inds],N[1],N[2])
+
+    inputs = InputStruct(coord, N, N_ext, ℓ, ℓ_ext, x̄, x̄_ext, x̄_inds, dx̄, x₁, x₁_ext, x₁_inds,
+        x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, ∂S, r, r_ext, n₁, n₂, ɛ, ɛ_ext, ɛ_sm, F, F_ext, F_sm,
+        ω₀, k₀, γ⟂, D₀, a, bc, prod(bc), bk, input_modes, scatteringRegions,
+        channels, geometry, geoParams, wgd, wgp, wgt, wge, subPixelNum)
 
     return inputs
 end # end of function processInputs
@@ -512,12 +558,11 @@ inputs = updateInputs(inputs)
 """
 function updateInputs!(inputs::InputStruct, field::Symbol, value::Any)::InputStruct
 
-    ######
-    F_min = 1e-15
-    PML_extinction = 1e3
-    PML_ρ = 1/3
-    PML_power_law = 2
-    ######
+    #if !(length(inputs.wgd)==length(inputs.wgp)==length(inputs.wgt)==length(inputs.wge))
+    #    error("Waveguide parameters have different lengths.")
+    #end
+
+    F_min, PML_extinction, PML_ρ, PML_power_law, α_imag = PML_params()
 
     setfield!(inputs,field,value)
 
@@ -525,10 +570,6 @@ function updateInputs!(inputs::InputStruct, field::Symbol, value::Any)::InputStr
         inputs.k₀ = inputs.ω₀
     elseif field == :k₀
         inputs.ω₀ = inputs.k₀
-    elseif field == :ω
-        inputs.k = inputs.ω
-    elseif field == :k
-        inputs.ω = inputs.k
     end
 
     if field in [:∂R, :N, :bc]
@@ -598,21 +639,33 @@ function updateInputs!(inputs::InputStruct, field::Symbol, value::Any)::InputStr
 
     end
 
-    if  field in [:∂R, :N, :bc, :F, :ε, :subPixelNum, :geoParams]
+    if  field in [:∂R, :N, :bc, :F, :n₁, :n₂, :ε, :subPixelNum, :geoParams]
 
         F = inputs.F
-        ɛ = inputs.ɛ
+        if field == :ε
+            n₁ = real(sqrt.(inputs.ε))
+            n₂ = imag(sqrt.(inputs.ε))
+        else
+            n₁ = inputs.n₁
+            n₂ = inputs.n₂
+        end
+        wge = inputs.wge
 
         F[iszero.(F)] = F_min
-        F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F)
+        F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F_min*ones(size(wge)), F)
 
-        ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], ɛ)
+        ε = n₁ + 1.0im*n₂
+        ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wge, ɛ)
 
         ɛ_sm, F_sm, r_ext = subPixelSmoothing_core( (inputs.x₁, inputs.x₂),
             (inputs.x₁_ext, inputs.x₂_ext), inputs.∂R_ext, ɛ_ext, F_ext,
-            inputs.subPixelNum, false, [Int[] Int[]], inputs.geometry, inputs.geoParams)
+            inputs.subPixelNum, false, [Int[] Int[]], inputs.geometry,
+            inputs.geoParams, inputs.wgd, inputs.wgp, inputs.wgt)
+
+        r = reshape(r_ext[inputs.x̄_inds],inputs.N[1],inputs.N[2])
 
         inputs.F_ext = F_ext
+        inputs.r = r
         inputs.r_ext = r_ext
         inputs.ɛ_sm = ɛ_sm
         inputs.F_sm = F_sm
@@ -693,4 +746,19 @@ function open_to_pml_in(inputs1::InputStruct)::InputStruct
         inputs = inputs1
     end
     return inputs
+end
+
+
+"""
+PML_params()
+"""
+function PML_params()::Tuple{Float64,Float64,Float64,Int,Float64}
+
+    F_min = 1e-15
+    PML_extinction = 1e3
+    PML_ρ = 1/3
+    PML_power_law = 2
+    α_imag = -.25
+
+    return F_min, PML_extinction, PML_ρ, PML_power_law, α_imag
 end

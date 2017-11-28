@@ -10,11 +10,9 @@ k,ψ =  computeK_L_core(inputs, k; nk=1, F=[1.], truncate=false, ψ_init=[])
 
     ψ[cavity size, # of poles]
 """
-function computeK_L_core(inputs::InputStruct, k::Union{Complex128,Float64,Int}; nk::Int=1,
-    F::Array{Float64,1}=[1.], truncate::Bool=false,
+function computeK_L_core(inputs::InputStruct, k::Complex128;
+    nk::Int=1, F::Array{Float64,1}=[1.], truncate::Bool=false,
     ψ_init::Array{Complex128,1}=Complex128[])::Tuple{Array{Complex128,1},Array{Complex128,2}}
-
-    k = Complex128(k)
 
     ∇² = laplacian(k,inputs)
 
@@ -58,13 +56,13 @@ k,ψ =  computePole_L(inputs, k; np=1, F=1, truncate = false, ψ_init = [])
 
     ψ[cavity size, # of poles]
 """
-function computePole_L(inputs1::InputStruct, k::Union{Complex128,Float64,Int}; np::Int=1,
+function computePole_L(inputs1::InputStruct, k::Union{Complex128,Float64,Int64}; np::Int=1,
     F::Array{Float64,1}=[1.], truncate::Bool = false,
     ψ_init::Array{Complex128,1}=Complex128[])::Tuple{Array{Complex128,1},Array{Complex128,2}}
 
     inputs = open_to_pml_out(inputs1)
 
-    k, ψ = computeK_L_core(inputs, k; nk=np, F=F, truncate=truncate, ψ_init = ψ_init)
+    K, ψ = computeK_L_core(inputs, complex(1.0*k); nk=np, F=F, truncate=truncate, ψ_init = ψ_init)
 end #end of function computePole_L
 
 
@@ -85,7 +83,7 @@ function computeZero_L(inputs1::InputStruct, k::Union{Complex128,Float64,Int}; n
 
     inputs = open_to_pml_in(inputs1)
 
-    k, ψ = computeK_L_core(inputs, k; nk=nz, F=F, truncate=truncate, ψ_init=ψ_init)
+    K, ψ = computeK_L_core(inputs, complex(1.0*k); nk=nz, F=F, truncate=truncate, ψ_init=ψ_init)
 end # end of function computeZero_L
 
 
@@ -121,7 +119,7 @@ function computeUZR_L(inputs1::InputStruct, k::Union{Complex128,Float64,Int}; nu
         updateInputs!(inputs, :bc, [inputs.bc[1], inputs.bc[2], "pml_out", "pml_in"])
     end
 
-    k, ψ = computeK_L_core(inputs, k; nk=nu, F=F, truncate=truncate, ψ_init = ψ_init)
+    K, ψ = computeK_L_core(inputs, complex(1.0*k); nk=nu, F=F, truncate=truncate, ψ_init = ψ_init)
 end # end of function computeUZR_L
 
 
@@ -130,12 +128,12 @@ end # end of function computeUZR_L
 
     Compute CF state according to bc set in inputs.
 """
-function computeCF(inputs::InputStruct,k::Union{Complex128,Float64,Int}; nCF::Int=1,
+function computeCF(inputs::InputStruct,k::Complex128; nCF::Int=1,
     F::Array{Float64,1}=[1.], η_init::Complex128=complex(0.),
     u_init::Array{Complex128,1}=Complex128[],
     truncate::Bool=false)::Tuple{Array{Complex128,1},Array{Complex128,2}}
 
-    k = Complex128(k); k²= k^2
+    k²= k^2
 
     ∇² = laplacian(k, inputs)
 
@@ -179,7 +177,7 @@ function computeK_NL1(inputs::InputStruct, k_init::Union{Complex128,Float64,Int}
     k_avoid::Array{Complex128,1}=Complex128[0], tol::Float64=.5, max_count::Int = 15,
     max_iter::Int=50)::Tuple{Array{Complex128,1},Array{Complex128,2},Array{Complex128,1},Bool}
 
-    ηt, ut = computeCF(inputs, k_init; nCF = 1, η_init=η_init, u_init = u_init)
+    ηt, ut = computeCF(inputs, complex(k_init); nCF = 1, η_init=η_init, u_init = u_init)
 
     γ⟂ = inputs.γ⟂; k₀ = inputs.k₀; D₀ = inputs.D₀; dx̄ = inputs.dx̄
     function f!(z, fvec)
@@ -252,7 +250,7 @@ function computePole_NL1(inputs1::InputStruct, k_init::Union{Complex128,Float64,
 
     inputs = open_to_pml_out(inputs1)
 
-    k, ψ, η, conv = computeK_NL1(inputs, k_init; F=F, dispOpt=dispOpt, η_init=η_init,
+    k, ψ, η, conv = computeK_NL1(inputs, complex(k_init); F=F, dispOpt=dispOpt, η_init=η_init,
         u_init=u_init, k_avoid=k_avoid, tol=tol, max_count=max_count, max_iter=max_iter)
 end # end of function computePole_NL1
 
@@ -274,7 +272,7 @@ function computeZero_NL1(inputs1::InputStruct, k_init::Union{Complex128,Float64,
 
     inputs = open_to_pml_in(inputs1)
 
-    k, ψ, η, conv = computeK_NL1(inputs, k_init; F=F, dispOpt=dispOpt, η_init=η_init,
+    k, ψ, η, conv = computeK_NL1(inputs, complex(k_init); F=F, dispOpt=dispOpt, η_init=η_init,
         u_init=u_init, k_avoid=k_avoid, tol=tol, max_count=max_count, max_iter=max_iter)
 end # end of function computeZero_NL1
 

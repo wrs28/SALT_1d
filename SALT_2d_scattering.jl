@@ -1,5 +1,5 @@
 """
-ψ, ϕ, A, inputs = computePsi(inputs, k; isNonLinear=false, dispOpt=false, ψ_init=[],
+ψ, ϕ, A, inputs = compute_scatter(inputs, k; isNonLinear=false, dispOpt=false, ψ_init=[],
     F=[1.], truncate=false, A=[], fileName="", ftol=2e-8, iter=750)
 
     Solves inhomogeneous problem with source defined in incident wave file.
@@ -8,16 +8,19 @@
 
     A is a factorized wave operator.
 """
-function computePsi(inputs1::InputStruct, k::Union{Complex128,Float64,Int}; isNonLinear::Bool=false,
-    dispOpt::Bool = false, ψ_init::Array{Complex128,1}=Complex128[], F::Array{Float64,1}=[1.],
-    truncate::Bool=false, A::Base.SparseArrays.UMFPACK.UmfpackLU=lufact(speye(1,1)),
-    fileName::String = "", ftol::Float64=2e-8,
-    iter::Int=150)::Tuple{Array{Complex128,1},Array{Complex128,1},Base.SparseArrays.UMFPACK.UmfpackLU,InputStruct}
+function compute_scatter(inputs::InputStruct, K::Union{Complex128,Float64,Int};
+    isNonLinear::Bool=false, dispOpt::Bool = false, ψ_init::Array{Complex128,1}=Complex128[],
+    F::Array{Float64,1}=[1.], truncate::Bool=false,
+    A::Base.SparseArrays.UMFPACK.UmfpackLU=lufact(speye(1,1)), fileName::String = "",
+    ftol::Float64=2e-8, iter::Int=150)::
+    Tuple{Array{Complex128,1},Array{Complex128,1},Base.SparseArrays.UMFPACK.UmfpackLU,InputStruct}
+
+    k = complex(1.0*K)
 
     if !isNonLinear
-        ψ, φ, A, inputs = computePsi_linear(inputs1, k; A=A, F=F)
+        ψ, φ, A, inputs = compute_scatter_linear(inputs, k; A=A, F=F)
     elseif isNonLinear
-        ψ, φ, A, inputs = computePsi_nonlinear(inputs1, k; A=A, F=F, dispOpt=dispOpt, ψ_init=ψ_init, ftol=ftol, iter=iter)
+        ψ, φ, A, inputs = compute_scatter_nonlinear(inputs, k; A=A, F=F, dispOpt=dispOpt, ψ_init=ψ_init, ftol=ftol, iter=iter)
     end
 
     if !isempty(fileName)
@@ -41,7 +44,7 @@ end # end of function computePsi
 
 
 """
-ψ, ϕ, A, inputs = computePsi_linear(inputs, k; A=[], F=[1.])
+ψ, ϕ, A, inputs = compute_scatter_linear(inputs, k; A=[], F=[1.])
 
     Solves linear inhomogeneous problem with sources determined by choice
     of boundary conditions.
@@ -50,13 +53,13 @@ end # end of function computePsi
 
     A is a factorized wave operator.
 """
-function computePsi_linear(inputs1::InputStruct, k::Union{Complex128,Float64,Int};
+function compute_scatter_linear(inputs1::InputStruct, k::Complex128;
     A::Base.SparseArrays.UMFPACK.UmfpackLU=lufact(speye(1,1)),
-    F::Array{Float64,1}=[1.])::Tuple{Array{Complex128,1},Array{Complex128,1},Base.SparseArrays.UMFPACK.UmfpackLU,InputStruct}
+    F::Array{Float64,1}=[1.])#::Tuple{Array{Complex128,1},Array{Complex128,1},Base.SparseArrays.UMFPACK.UmfpackLU,InputStruct}
 
     inputs = open_to_pml_out(inputs1)
 
-    k = Complex128(k); k²= k^2
+    k²= k^2
 
     j, ∇², φ₊, φ₋ = synthesize_source(inputs, k)
 
@@ -83,14 +86,12 @@ end # end of function computePsi_linear
 
     A is a factorized wave operator.
 """
-function computePsi_nonlinear(inputs1::InputStruct, k::Union{Complex128,Float64,Int};
+function compute_scatter_nonlinear(inputs1::InputStruct, k::Complex128;
     dispOpt::Bool = false, ψ_init::Array{Complex128,1}=Complex128[], F::Array{Float64,1}=[1.],
     A::Base.SparseArrays.UMFPACK.UmfpackLU=lufact(speye(1,1)),
     ftol::Float64=2e-8, iter::Int=150)::Tuple{Array{Complex128,1},Array{Complex128,1},Base.SparseArrays.UMFPACK.UmfpackLU,InputStruct}
 
         inputs = open_to_pml(inputs1)
-
-        k = Complex128(k)
 
         j, ∇², φ₊, φ₋ = createJ(inputs, k, m)
 
@@ -142,14 +143,22 @@ S =  computeS(inputs; isNonLinear=false, F=[1.], dispOpt = true,
 
     N is the number of steps to go from D0 = 0 to given D0
 """
-function computeS(inputs::InputStruct; isNonLinear::Bool=false, F::Array{Float64,1}=[1.],
-    dispOpt::Bool=true, fileName::String = "", N::Int=1, N_Type::String="D",
+function computeS(inputs::InputStruct,
+    k::Union{Array{Complex128,1},Array{Float64,1},Complex128,Float64,Int};
+    isNonLinear::Bool=false, F::Array{Float64,1}=[1.], dispOpt::Bool=true,
+    fileName::String = "", N::Int=1, N_Type::String="D",
     ψ_init::Array{Complex128,1}=Complex128[])::Array{Complex128,4}
 
+    if isempty(k)
+        K = Complex128[k]
+    else
+        K = complex(1.0*k)
+    end
+
     if !isNonLinear
-        S = computeS_linear(inputs; F=F, dispOpt=dispOpt, fileName=fileName)
+        S = computeS_linear(inputs, K; F=F, dispOpt=dispOpt, fileName=fileName)
     elseif isNonLinear
-        S = computeS_nonlinear(inputs; N=N, N_Type=N_Type, isNonLinear=isNonLinear,
+        S = computeS_nonlinear(inputs, K; N=N, N_Type=N_Type, isNonLinear=isNonLinear,
                             F=F, dispOpt=dispOpt, ψ_init=ψ_init, fileName=fileName)
     end
 
@@ -160,10 +169,11 @@ end # end of fuction computeS
 """
 S =  computeS_linear(inputs; F=[1.], dispOpt=true, fileName = "")
 """
-function computeS_linear(inputs::InputStruct; F::Array{Float64,1}=[1.], dispOpt::Bool=true,
+function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
+    F::Array{Float64,1}=[1.], dispOpt::Bool=true,
     fileName::String = "")::Array{Complex128,4}
 
-    M = inputs.nChannels
+    M = length(inputs.channels)
     S = NaN*ones(Complex128,length(inputs.k),M,M,1)
     a_original = inputs.a
     a = zeros(Complex128,M)
@@ -185,7 +195,7 @@ function computeS_linear(inputs::InputStruct; F::Array{Float64,1}=[1.], dispOpt:
             a = 0*a
             a[m] = 1.
             updateInputs!(inputs, :a, a)
-            ψ₋, ϕ, ζ, inputs_s = computePsi(inputs, k; A=ζ)
+            ψ₋, ϕ, ζ, inputs_s = compute_scatter(inputs, k; A=ζ)
             for m′ in 1:M
                 S[ii,m,m′,1] = analyze_output(inputs_s, k, ψ₋, m′)
             end
@@ -210,9 +220,10 @@ S =  computeS(inputs::InputStruct; N=10, N_Type="D", isNonLinear=false, F=1.,
 
     N is the number of steps to go from D0 = 0 to given D0
 """
-function computeS_nonlinear(inputs1::InputStruct; N::Int=1, N_Type::String="D",
-    isNonLinear::Bool=false, F::Array{Float64,1}=[1.], dispOpt::Bool=true,
-    ψ_init::Array{Complex128,1}=Complex128[], fileName::String = "")::Array{Complex128,4}
+function computeS_nonlinear(inputs1::InputStruct, k::Array{Complex128,1};
+    N::Int=1, N_Type::String="D", isNonLinear::Bool=false, F::Array{Float64,1}=[1.],
+    dispOpt::Bool=true, ψ_init::Array{Complex128,1}=Complex128[],
+    fileName::String = "")::Array{Complex128,4}
 
     if !isempty(inputs1.bc ∩ ["o", "open", "pml_in"])
         inputs = deepcopy(inputs1)
@@ -226,7 +237,7 @@ function computeS_nonlinear(inputs1::InputStruct; N::Int=1, N_Type::String="D",
         inputs = inputs1
     end
 
-    M = inputs.nChannels
+    M = length(inputs.channels)
     D₀ = inputs.D₀
     A = inputs.a
 
@@ -385,33 +396,45 @@ end # end of fuction computeS
 """
 synthesize_source(inputs, k)
 """
-function synthesize_source(inputs1::InputStruct, k::Complex128)::
+function synthesize_source(inputs::InputStruct, k::Complex128)::
     Tuple{Array{Complex128,1},SparseMatrixCSC{Complex128,Int64},Array{Complex128,1},Array{Complex128,1}}
 
-    k² = k^2
-    ∇² = laplacian(k,inputs1)
-
-    inputs = deepcopy(inputs1)
-    inputs.ε[inputs.scatteringRegions] = 1
-    updateInputs!(inputs, :ε, inputs.ε);
-
     N = prod(inputs.N_ext)
-    ɛk² = sparse(1:N, 1:N, inputs.ɛ_sm[:]*k², N, N, +)
-
     φ₊ = zeros(Complex128,N)
     φ₋ = zeros(Complex128,N)
     φt₊ = zeros(Complex128,N)
     φt₋ = zeros(Complex128,N)
 
-    for m in 1:inputs.nChannels
+    M₊, M₋ = source_mask(inputs)
+
+    for m in 1:length(inputs.channels)
         φt₊, φt₋ = incident_modes(inputs, k, m)
         φ₊ += inputs.a[m]*φt₊
         φ₋ += inputs.a[m]*φt₋
     end
 
-    j = (∇²+ɛk²)*(φ₊+φ₋)
+    ∇² = laplacian(k,inputs)
 
-    return j, ∇², φ₊, φ₋
+    inputs1 = deepcopy(inputs)
+    inputs1.ε[inputs1.scatteringRegions] = 1
+    updateInputs!(inputs1, :ε, inputs1.ε);
+
+    k² = k^2
+    ɛk² = sparse(1:N, 1:N, inputs1.ɛ_sm[:]*k², N, N, +)
+
+    j = (∇²+ɛk²)*(M₊.*φ₊ + M₋.*φ₋)
+
+    return j, ∇², M₊.*φ₊, M₋.*φ₋
+end
+
+
+"""
+source_mask(inputs)
+"""
+function source_mask(inputs::InputStruct)::Tuple{Array{Bool,1},Array{Bool,1}}
+    M₊ = (inputs.∂S[1] .≤ inputs.x̄_ext[1] .≤ inputs.∂S[2]) .& (inputs.∂S[3] .≤ inputs.x̄_ext[2] .≤ inputs.∂S[4])
+    M₋ = (inputs.∂R[1] .≤ inputs.x̄_ext[1] .≤ inputs.∂R[2]) .& (inputs.∂R[3] .≤ inputs.x̄_ext[2] .≤ inputs.∂R[4])
+    return M₊, M₋
 end
 
 
@@ -424,35 +447,30 @@ function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
     φ₊ = zeros(Complex128, prod(inputs.N_ext))
     φ₋ = zeros(Complex128, prod(inputs.N_ext))
 
-    inds₊ = find(indexin(inputs.r_ext, inputs.incidentWaveRegions+8).>0)
-    inds₋ = find(indexin(inputs.r_ext, (1:(findmax(inputs.r_ext)[1]-8)) +8).>0)
-
     bc_sig = inputs.bc_sig
     if bc_sig in ["Oddd", "Odnn", "Oddn", "Odnd"]
         x = inputs.x̄_ext[1] - inputs.∂R[2]
         y = inputs.x̄_ext[2]
-        kᵤ = quasi_1d_transverse_y(inputs,m,y)[1]
+        φy = quasi_1d_transverse_y.(inputs,m,y)
+        kᵤ = quasi_1d_transverse_y(inputs,m)
         kₓ = sqrt(k^2 - kᵤ^2)
-        for ii in 1:length(inds₊)
-            φy = quasi_1d_transverse_y(inputs,m,y[inds₊[ii]])[2]
-            φ₊[inds₊[ii]] += +sqrt(1/kₓ)*exp(+1im*kₓ*x[inds₊[ii]])*φy
-        end
-        for ii in 1:length(inds₋)
-            φy = quasi_1d_transverse_y(inputs,m,y[inds₋[ii]])[2]
-            φ₋[inds₋[ii]] += -sqrt(1/kₓ)*exp(-1im*kₓ*x[inds₋[ii]])*φy
-        end
+        φ₊ = +sqrt(1/kₓ)*exp(+1im*kₓ*x).*φy
+        φ₋ = -sqrt(1/kₓ)*exp(-1im*kₓ*x).*φy
     elseif bc_sig in ["dOdd", "dOnn", "dOdn", "dOnd"]
         x = inputs.x̄_ext[1] - inputs.∂R[1]
         y = inputs.x̄_ext[2]
-        kᵤ = quasi_1d_transverse_y(inputs,m,y)[1]
+        φy = quasi_1d_transverse_y.(inputs,m,y)
+        kᵤ = quasi_1d_transverse_y(inputs,m)
         kₓ = sqrt(k^2 - kᵤ^2)
-        for ii in 1:length(inds₊)
-            φy = quasi_1d_transverse_y(inputs,m,y[inds₊[ii]])[2]
-            φ₊[inds₊[ii]] += +sqrt(1/kₓ)*exp(-1im*kₓ*x[inds₊[ii]])*φy
-        end
-        for ii in 1:length(inds₋)
-            φy = quasi_1d_transverse_y(inputs,m,y[inds₋[ii]])[2]
-            φ₋[inds₋[ii]] += -sqrt(1/kₓ)*exp(+1im*kₓ*x[inds₋[ii]])*φy
+        φ₊ = +sqrt(1/kₓ)*exp(-1im*kₓ*x).*φy
+        φ₋ = -sqrt(1/kₓ)*exp(+1im*kₓ*x).*φy
+    elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
+        x = inputs.x̄_ext[1] - inputs.∂R[1]
+        kₓ, φy = wg_transverse_y(inputs, k, m)
+        if inputs.channels[m].side in ["l", "L", "left", "Left"]
+            φ₊ = +sqrt(1/kₓ)*exp.(+1im*kₓ*x).*φy
+        else
+            φ₊ = +sqrt(1/kₓ)*exp.(-1im*kₓ*x).*φy
         end
     end
 
@@ -461,57 +479,191 @@ end
 
 
 """
-quasi_1d_transverse_x(inputs, m, x)
+kₓ = quasi_1d_transverse_x(inputs, m)
+OR
+φ = quasi_1d_transverse_x(inputs, m, x)
 """
-function quasi_1d_transverse_x(inputs::InputStruct, m::Int,
-    x::Union{Float64,Array{Float64,1}})::Union{Float64,Array{Float64,1}}
+function quasi_1d_transverse_x(inputs::InputStruct, m::Int)::Float64
 
     ℓ = inputs.ℓ[1]
     bc = inputs.bc
+    q = inputs.channels[m].tqn
 
     if bc[1:2] == ["n", "n"]
-        kₓ = (m-1)*π/ℓ
+        kₓ = (q-1)*π/ℓ
+    elseif bc[1:2] == ["n", "d"]
+        kₓ = (q-1/2)*π/ℓ
+    elseif bc[1:2] == ["d", "n"]
+        kₓ = (q-1/2)*π/ℓ
+    elseif bc[1:2] == ["d", "d"]
+        kₓ = q*π/ℓ
+    end
+
+    return kₓ
+end
+function quasi_1d_transverse_x(inputs::InputStruct, m::Int, x::Float64)::Float64
+
+    ℓ = inputs.ℓ[1]
+    bc = inputs.bc
+    kₓ = quasi_1d_transverse_y(inputs,m)
+
+    if bc[1:2] == ["n", "n"]
         φ = sqrt(2/ℓ)*cos.(kₓ*(x-inputs.∂R[1]))
     elseif bc[1:2] == ["n", "d"]
-        kₓ = (m-1/2)*π/ℓ
         φ = sqrt(2/ℓ)*cos.(kₓ*(x-inputs.∂R[1]))
     elseif bc[1:2] == ["d", "n"]
-        kₓ = (m-1/2)*π/ℓ
         φ = sqrt(2/ℓ)*sin.(kₓ*(x-inputs.∂R[1]))
     elseif bc[1:2] == ["d", "d"]
-        kₓ = m*π/ℓ
         φ = sqrt(2/ℓ)*sin.(kₓ*(x-inputs.∂R[1]))
     end
 
-    return kₓ, φ
+    return φ
 end
 
 
 """
-quasi_1d_transverse_y(inputs, m, y)
+kᵤ = quasi_1d_transverse_y(inputs, m)
+OR
+φ = quasi_1d_transverse_y(inputs, m, y)
 """
-function quasi_1d_transverse_y(inputs::InputStruct, m::Int,
-    y::Union{Float64,Array{Float64,1}})::Tuple{Complex128,Union{Float64,Array{Float64,1}}}
+function quasi_1d_transverse_y(inputs::InputStruct, m::Int)::Float64
 
     ℓ = inputs.ℓ[2]
     bc = inputs.bc
+    q = inputs.channels[m].tqn
 
     if bc[3:4] == ["n", "n"]
-        kᵤ = (m-1)*π/ℓ
+        kᵤ = (q-1)*π/ℓ
+    elseif bc[3:4] == ["n", "d"]
+        kᵤ = (q-1/2)*π/ℓ
+    elseif bc[3:4] == ["d", "n"]
+        kᵤ = (q-1/2)*π/ℓ
+    elseif bc[3:4] == ["d", "d"]
+        kᵤ = q*π/ℓ
+    end
+
+    return kᵤ
+end
+function quasi_1d_transverse_y(inputs::InputStruct, m::Int, y::Float64)::Float64
+
+    ℓ = inputs.ℓ[2]
+    bc = inputs.bc
+    kᵤ = quasi_1d_transverse_y(inputs,m)
+
+    if bc[3:4] == ["n", "n"]
         φ = sqrt(2/ℓ)*cos.(kᵤ*(y-inputs.∂R[3]))
     elseif bc[3:4] == ["n", "d"]
-        kᵤ = (m-1/2)*π/ℓ
         φ = sqrt(2/ℓ)*cos.(kᵤ*(y-inputs.∂R[3]))
     elseif bc[3:4] == ["d", "n"]
-        kᵤ = (m-1/2)*π/ℓ
         φ = sqrt(2/ℓ)*sin.(kᵤ*(y-inputs.∂R[3]))
     elseif bc[3:4] == ["d", "d"]
-        kᵤ = m*π/ℓ
         φ = sqrt(2/ℓ)*sin.(kᵤ*(y-inputs.∂R[3]))
     end
 
-    return kᵤ, φ
+    return φ
 end
+
+
+"""
+wg_transverse_y(inputs, m, y)
+"""
+function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
+    Tuple{Complex128, Array{Complex128,1}}
+
+    inputs = deepcopy(inputs1)
+
+    updateInputs!(inputs,:wgd,[inputs.wgd[inputs.channels[m].wg]])
+    updateInputs!(inputs,:wge,[inputs.wge[inputs.channels[m].wg]])
+    updateInputs!(inputs,:wgt,[inputs.wgt[inputs.channels[m].wg]])
+    updateInputs!(inputs,:wgp,[inputs.wgp[inputs.channels[m].wg]])
+    updateInputs!(inputs,:bc,["pml_out", "pml_out", "pml_out", "pml_out"])
+
+    N = inputs.N_ext[2]
+    k² = k^2
+    ε_sm = real(inputs.ε_sm[inputs.x₁_inds[1],:])
+    εk² = sparse(1:N, 1:N, ε_sm[:]*k², N, N, +)
+    ∇₁², ∇₂² = laplacians(k,inputs)
+
+    nev = 4 + 2*inputs.channels[m].tqn
+    kₓ²,φ = eigs(∇₂²+εk², nev=nev, sigma=3*k², which = :LM)
+    perm = sortperm(kₓ²; by = x -> real(sqrt.(x)), rev=true)
+    φ_temp = φ[:,perm[inputs.channels[m].tqn]]
+    φy = repmat(transpose(φ_temp),inputs.N_ext[1],1)[:]
+    φy = φy/sqrt(sum(φ_temp.*ε_sm.*φ_temp))
+    return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy)
+end
+
+
+"""
+∇₁², ∇₂² = laplacians(k, inputs)
+
+    Computes 2-dim laplacian based on parameters and boundary conditions given in
+    INPUTS, evaluated at (complex) frequency K.
+"""
+function laplacians(k::Complex128, inputs::InputStruct)::
+    Tuple{SparseMatrixCSC{Complex128,Int},SparseMatrixCSC{Complex128,Int}}
+
+    # definitions block#
+    ∂R = inputs.∂R_ext
+    x₁ = inputs.x₁_ext
+    x₂ = inputs.x₂_ext
+    bc = inputs.bc
+
+    k₁ = inputs.bk[1]
+    k₂ = inputs.bk[2]
+
+    ℓ₁ = inputs.ℓ_ext[1]
+    ℓ₂ = inputs.ℓ_ext[2]
+
+    N₁ = inputs.N_ext[1]
+    N₂ = inputs.N_ext[2]
+
+    dx₁ = inputs.dx̄[1]
+    dx₂ = inputs.dx̄[2]
+
+    Σ₁,Σ₂ = σ(inputs)
+
+    ∇₁ = grad_1d(N₁-1,dx₁)
+    ∇₂ = grad_1d(N₂-1,dx₂)
+
+    s₁₁ = sparse(1:N₁-1,1:N₁-1,1./(1+.5im*(Σ₁[1:end-1] + Σ₁[2:end])/real(k)),N₁-1,N₁-1)
+    s₁₂ = sparse(1:N₁,1:N₁,1./(1+1im*(Σ₁)/real(k)),N₁,N₁)
+
+    s₂₁ = sparse(1:N₂-1,1:N₂-1,1./(1+.5im*(Σ₂[1:end-1] + Σ₂[2:end])/real(k)),N₂-1,N₂-1)
+    s₂₂ = sparse(1:N₂,1:N₂,1./(1+1im*(Σ₂)/real(k)),N₂,N₂)
+
+    ∇₁² = -(s₁₂*transpose(∇₁)*s₁₁*∇₁)
+    ∇₂² = -(s₂₂*transpose(∇₂)*s₂₁*∇₂)
+    ind = [1, N₁, 1, N₂, 1]
+
+    for i in 1:4
+        if i ≤ 2
+            if bc[i] in ["O", "I"]
+                ∇₁²[ind[i],ind[i]]   += -2/dx₁^2
+            elseif bc[i] == "d"
+                ∇₁²[ind[i],ind[i]]   += -2/dx₁^2
+            elseif bc[i] == "n"
+                ∇₁²[ind[i],ind[i]]   += 0
+            elseif bc[i] == "p"
+                ∇₁²[ind[i],ind[i]]   += -1/dx₁^2
+                ∇₁²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓ₁*k₁)/dx₁^2
+            end
+        else
+            if bc[i] in ["O", "I"]
+                ∇₂²[ind[i],ind[i]]   += -2/dx₂^2
+            elseif bc[i] == "d"
+                ∇₂²[ind[i],ind[i]]   += -2/dx₂^2
+            elseif bc[i] == "n"
+                ∇₂²[ind[i],ind[i]]   += 0
+            elseif bc[i] == "p"
+                ∇₂²[ind[i],ind[i]]   += -1/dx₂^2
+                ∇₂²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓ₂*k₂)/dx₂^2
+            end
+        end
+    end
+
+    return ∇₁², ∇₂²
+end # end of function laplacians
 
 
 """
@@ -524,24 +676,44 @@ function analyze_output(inputs::InputStruct, k::Complex128,
     if bc_sig in ["Oddd", "Odnn", "Oddn", "Odnd"]
         x = inputs.x₁[1] - inputs.∂R[2]
         y = inputs.x₂_ext
-        kᵤ, φy = quasi_1d_transverse_y(inputs, m, y)
+        φy = quasi_1d_transverse_y.(inputs,m,y)
+        kᵤ = quasi_1d_transverse_y(inputs,m)
         kₓ = sqrt(k^2 - kᵤ^2)
         φ = +sqrt(1/kₓ)*exp(+1im*kₓ*x)*φy
         P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[1,:]
         cm = sum(φ.*P)*inputs.dx̄[2]
     elseif bc_sig in ["dOdd", "dOnn", "dOdn", "dOnd"]
         x = inputs.x₁[end] - inputs.∂R[1]
-        y = inputs.x₂_exts
-        kᵤ, φy = quasi_1d_transverse_y(inputs, m, y)
+        y = inputs.x₂_ext
+        φy = quasi_1d_transverse_y.(inputs,m,y)
+        kᵤ = quasi_1d_transverse_y(inputs,m)
         kₓ = sqrt(k^2 - kᵤ^2)
         φ = +sqrt(1/kₓ)*exp(-1im*kₓ*x)*φy
         P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[end,:]
         cm = sum(φ.*P)*inputs.dx̄[2]
+    elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
+        if (inputs.channels[m].wgd in ["x", "X"])
+            if inputs.channels[m].side in ["l", "L", "left", "Left"]
+                x = inputs.x₁[1] - inputs.∂R[1]
+                phs = exp.(+1im*kₓ*x)
+                P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[1,:]
+                ε = inputs.ε_sm[1,:]
+            elseif inputs.channels[m].side in ["r", "R", "right", "Right"]
+                x = inputs.x₁[end] - inputs.∂R[2]
+                phs = exp.(-1im*kₓ*x)
+                P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[end,:]
+                ε = inputs.ε_sm[end,:]
+            end
+            kₓ, φy = wg_transverse_y(inputs, k, m)
+            φ = sqrt(1/kₓ)*phs*reshape(φy,inputs.N_ext[1],:)[:,1]
+        elseif inputs.channels[m].wgd in ["y", "Y"]
+            error("Haven't written vertical waveguide code yet.")
+        end
+        cm = sum(φ.*ε.*P)*inputs.dx̄[2]
     end
 
     return cm
 end
-
 
 
 ################################################################################

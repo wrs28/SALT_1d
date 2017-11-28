@@ -1,5 +1,89 @@
 ################################################################################
-### Eigenvalue routines
+### NL2 Eigenvalue routines
+################################################################################
+
+
+"""
+computeK_L_core(inputs, k, fields, field_inds, params, nk, F, truncate, ψ_init)
+"""
+function computeK_L_core(inputs::InputStruct, k::Complex128, fields::Array{Symbol,1},
+    field_inds::Array{Int,1}, params::Array{Array{Float64,1},1}, nk::Int, F::Array{Float64,1},
+    truncate::Bool, ψ_init::Array{Complex128,1})::Tuple{SharedArray,Channel}
+
+    dims = tuple(nk, length.(params)...)
+    K = SharedArray{Complex128}(dims)
+
+    r = Channel(length(procs(K)))
+    for p in procs(K)
+        @async put!(r, remotecall_fetch(computeK_L_core!, p, K, inputs, k, fields, field_inds,
+                                params, nk, F, truncate, ψ_init))
+    end
+
+    return K,r
+end
+
+
+"""
+computeK_L_core!(K, inputs, k, fields, field_inds, params, nk, F, truncate, ψ_init)
+"""
+function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
+    fields::Array{Symbol,1}, field_inds::Array{Int,1}, params::Array{Array{Float64,1},1},
+    nk::Int, F::Array{Float64,1}, truncate::Bool, ψ_init::Array{Complex128,1})::SharedArray
+
+    inds = p_range(K)
+    subs = ind2sub(size(K)[2:end],inds)
+
+    for i in 1:length(inds)
+        for f in 1:length(fields)
+            if !isempty(size(getfield(inputs,fields[f])))
+                params_temp = getfield(inputs,fields[f])
+                params_temp[field_inds[f]] = params[f][subs[f][i]]
+                updateInputs!(inputs,fields[f],params_temp)
+            else
+                updateInputs!(inputs,fields[f],params[f][subs[f][i]])
+            end
+        end
+
+        K[:,[subs[j][i] for j in 1:length(subs)]...], ψ = computeK_L_core(inputs, k; nk=nk, F=F, truncate=truncate, ψ_init=ψ_init)
+    end
+
+    return K
+end
+
+
+"""
+computeZero_L(inputs, k, fields, field_inds, params; nz=1, F=[1.], truncate=false, ψ_init=[])
+    does parallel computation of computeZero_L over fields[field_inds]=params
+"""
+function computeZero_L(inputs1::InputStruct, k::Union{Complex128,Float64,Int},
+    fields::Array{Symbol,1}, field_inds::Array{Int,1}, params::Array{Array{Float64,1},1};
+    nz::Int=1, F::Array{Float64,1}=[1.], truncate::Bool=false,
+    ψ_init::Array{Complex128,1}=Complex128[])::Tuple{SharedArray,Channel}
+
+    inputs = open_to_pml_in(inputs1)
+
+    K,r = computeK_L_core(inputs, complex(1.0*k), fields, field_inds, params, nz, F, truncate, ψ_init)
+end # end of function computeZero_L
+
+
+"""
+p_range(q)
+    q is a shared array.
+    returns the indices to be computed on this process.
+"""
+function p_range(q::SharedArray)::Array{Int,1}
+    idx = indexpids(q)
+    if idx == 0 # This worker is not assigned a piece
+        return 1:0
+    end
+    nchunks = length(procs(q))
+    splits = [round(Int, s) for s in linspace(0, prod(size(q)[2:end]) , nchunks+1)]
+    splits[idx]+1:splits[idx+1]
+end
+
+
+################################################################################
+### NL2 Eigenvalue routines
 ################################################################################
 
 
@@ -259,9 +343,9 @@ end # end of function computeS_parallel_core
 
 
 """
-S_wait(r)
+P_wait(r)
 """
-function S_wait(r::Channel)
+function P_wait(r::Channel)
 
    c = 0
    while c < r.sz_max
