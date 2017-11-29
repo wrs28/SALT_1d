@@ -697,12 +697,12 @@ function analyze_output(inputs::InputStruct, k::Complex128,
             if inputs.channels[m].side in ["l", "L", "left", "Left"]
                 x = inputs.x₁[1] - inputs.∂R[1]
                 phs = exp.(+1im*kₓ*x)
-                P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[1,:]
+                P = reshape(ψ[inputs.x̄_inds],inputs.N_ext[1],:)[1,:]
                 ε = inputs.ε_sm[1,:]
             elseif inputs.channels[m].side in ["r", "R", "right", "Right"]
                 x = inputs.x₁[end] - inputs.∂R[2]
                 phs = exp.(-1im*kₓ*x)
-                P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[end,:]
+                P = reshape(ψ[inputs.x̄_inds],inputs.N_ext[1],:)[end,:]
                 ε = inputs.ε_sm[end,:]
             end
             φ = sqrt(1/kₓ)*phs*reshape(φy,inputs.N_ext[1],:)[:,1]
