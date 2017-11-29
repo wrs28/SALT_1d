@@ -706,6 +706,9 @@ function analyze_output(inputs::InputStruct, k::Complex128,
                 ε = inputs.ε_sm[end,:]
             end
             φ = sqrt(1/kₓ)*phs*reshape(φy,inputs.N_ext[1],:)[:,1]
+            println(size(φ))
+            println(size(P))
+            println(size(ε))
         elseif inputs.channels[m].wgd in ["y", "Y"]
             error("Haven't written vertical waveguide code yet.")
         end
