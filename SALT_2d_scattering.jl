@@ -589,7 +589,7 @@ function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
     perm = sortperm(kₓ²; by = x -> real(sqrt.(x)), rev=true)
     φ_temp = φ[:,perm[inputs.channels[m].tqn]]
     φy = repmat(transpose(φ_temp),inputs.N_ext[1],1)[:]
-    φy = φy/sqrt(sum(φ_temp.*ε_sm.*φ_temp))
+    φy = φy/sqrt(sum(φ_temp.*ε_sm.*φ_temp)*inputs.dx̄[2])
     return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy)
 end
 
@@ -706,9 +706,6 @@ function analyze_output(inputs::InputStruct, k::Complex128,
                 ε = inputs.ε_sm[end,inputs.x₂_inds]
             end
             φ = sqrt(1/kₓ)*phs*reshape(φy[inputs.x̄_inds],inputs.N[1],:)[:,1]
-            println(size(φ))
-            println(size(P))
-            println(size(ε))
         elseif inputs.channels[m].wgd in ["y", "Y"]
             error("Haven't written vertical waveguide code yet.")
         end
