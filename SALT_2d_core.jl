@@ -674,6 +674,126 @@ function updateInputs!(inputs::InputStruct, field::Symbol, value::Any)::InputStr
 
     return inputs
 end # end of function updateInputs
+function updateInputs!(inputs::InputStruct, fields::Array{Symbol,1}, value::Array{Any,1})::InputStruct
+
+    #if !(length(inputs.wgd)==length(inputs.wgp)==length(inputs.wgt)==length(inputs.wge))
+    #    error("Waveguide parameters have different lengths.")
+    #end
+
+    F_min, PML_extinction, PML_ρ, PML_power_law, α_imag = PML_params()
+
+    for f in 1:length(fields)
+        setfield!(inputs,fields[f],value[f])
+    end
+
+    if any(fields .== :ω₀)
+        inputs.k₀ = inputs.ω₀
+    elseif any(fields .== :k₀)
+        inputs.ω₀ = inputs.k₀
+    end
+
+    if !isempty(fields ∩ [:∂R, :N, :bc])
+        ∂R = inputs.∂R
+        N = inputs.N
+        fix_bc!(inputs.bc)
+        bc = inputs.bc
+        inputs.bc_sig = prod(bc)
+
+        ℓ = [∂R[2] - ∂R[1], ∂R[4] - ∂R[3]]
+
+        dx₁ = ℓ[1]/N[1]
+        dx₂ = ℓ[2]/N[2]
+        dx̄ = [dx₁, dx₂]
+
+        dN = Int[0, 0, 0, 0]
+        for i in 1:4
+            if bc[i] in ["O", "I"]
+                dN[i] = ceil(Int,(PML_power_law+1)*log(PML_extinction)/PML_ρ)
+            elseif bc[i] == "d"
+                dN[i] = 0
+            elseif bc[i] == "n"
+                dN[i] = 0
+            elseif bc[i] == "o"
+                dN[i] = 0
+            elseif bc[i] == "p"
+                dN[i] = 0
+            end
+        end
+
+        N₁_ext = N[1] + dN[1] + dN[2]
+        ℓ₁_ext = dx₁*N₁_ext
+        x₁_ext::Array{Float64,1} = ∂R[1] + dx₁*(1/2-dN[1]) + dx₁*(0:N₁_ext-1)
+        x₁_inds = dN[1] + collect(1:N[1])
+        x₁ = x₁_ext[x₁_inds]
+
+        N₂_ext = N[2] + dN[3] + dN[4]
+        ℓ₂_ext = dx₂*N₂_ext
+        x₂_ext::Array{Float64,1} = ∂R[3] + dx₂*(1/2-dN[3]) + dx₂*(0:N₂_ext-1)
+        x₂_inds = dN[3] + collect(1:N[2])
+        x₂ = x₂_ext[x₂_inds]
+
+        N_ext = [N₁_ext, N₂_ext]
+        ℓ_ext = [ℓ₁_ext, ℓ₂_ext]
+        x̄_ext = (reshape(repmat(x₁_ext,1,N_ext[2]),:), reshape(repmat(x₂_ext',N_ext[1],1),:))
+        x̄_inds = reshape( repmat(x₁_inds,1,N[2]) + repmat(N₁_ext*(x₂_inds-1)',N[1],1) ,:)
+        x̄ = (x̄_ext[1][x̄_inds],x̄_ext[2][x̄_inds])
+
+        ∂R_ext = vcat([x₁_ext[1]-dx₁/2], [x₁_ext[end]+dx₁/2],
+            [x₂_ext[1]-dx₂/2], [x₂_ext[end]+dx₂/2], ∂R)
+
+        inputs.N_ext = N_ext
+        inputs.ℓ = ℓ
+        inputs.ℓ_ext = ℓ_ext
+        inputs.dx̄ = dx̄
+        inputs.x̄ = x̄
+        inputs.x̄_ext = x̄_ext
+        inputs.x̄_inds = x̄_inds
+        inputs.x₁ = x₁
+        inputs.x₁_ext = x₁_ext
+        inputs.x₁_inds = x₁_inds
+        inputs.x₂ = x₂
+        inputs.x₂_ext = x₂_ext
+        inputs.x₂_inds = x₂_inds
+        inputs.∂R = ∂R
+        inputs.∂R_ext = ∂R_ext
+
+    end
+
+    if  !isempty(fields ∩ [:∂R, :N, :bc, :F, :n₁, :n₂, :ε, :subPixelNum, :geoParams])
+
+        F = inputs.F
+        if field == :ε
+            n₁ = real(sqrt.(inputs.ε))
+            n₂ = imag(sqrt.(inputs.ε))
+        else
+            n₁ = inputs.n₁
+            n₂ = inputs.n₂
+        end
+        wge = inputs.wge
+
+        F[iszero.(F)] = F_min
+        F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F_min*ones(size(wge)), F)
+
+        ε = (n₁ + 1.0im*n₂).^2
+        ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wge, ɛ)
+
+        ɛ_sm, F_sm, r_ext = subPixelSmoothing_core( (inputs.x₁, inputs.x₂),
+            (inputs.x₁_ext, inputs.x₂_ext), inputs.∂R_ext, ɛ_ext, F_ext,
+            inputs.subPixelNum, false, [Int[] Int[]], inputs.geometry,
+            inputs.geoParams, inputs.wgd, inputs.wgp, inputs.wgt)
+
+        r = reshape(r_ext[inputs.x̄_inds],inputs.N[1],inputs.N[2])
+
+        inputs.F_ext = F_ext
+        inputs.r = r
+        inputs.r_ext = r_ext
+        inputs.ɛ_sm = ɛ_sm
+        inputs.F_sm = F_sm
+
+    end
+
+    return inputs
+end # end of function updateInputs
 
 
 """
@@ -718,11 +838,21 @@ function open_to_pml_out(inputs1::InputStruct)::InputStruct
         for i in 1:4
             if inputs.bc[i] in ["o", "I"]
                 inputs.bc[i] = "pml_out"
-                updateInputs!(inputs, :bc, inputs.bc)
             end
+        updateInputs!(inputs, :bc, inputs.bc)
         end
     else
         inputs = inputs1
+    end
+    return inputs
+end
+function open_to_pml_out(inputs1::InputStruct, flag::Bool)::InputStruct
+    inputs = deepcopy(inputs1)
+    for i in 1:4
+        if inputs.bc[i] in ["o", "I"]
+            inputs.bc[i] = "pml_out"
+        end
+        updateInputs!(inputs, :bc, inputs.bc)
     end
     return inputs
 end

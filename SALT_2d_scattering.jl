@@ -570,13 +570,13 @@ wg_transverse_y(inputs, m, y)
 function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
     Tuple{Complex128, Array{Complex128,1}}
 
-    inputs = deepcopy(inputs1)
-
-    updateInputs!(inputs,:wgd,[inputs.wgd[inputs.channels[m].wg]])
-    updateInputs!(inputs,:wge,[inputs.wge[inputs.channels[m].wg]])
-    updateInputs!(inputs,:wgt,[inputs.wgt[inputs.channels[m].wg]])
-    updateInputs!(inputs,:wgp,[inputs.wgp[inputs.channels[m].wg]])
-    updateInputs!(inputs,:bc,["pml_out", "pml_out", "pml_out", "pml_out"])
+    inputs = open_to_pml_out(inputs1, true)
+    fields = [:wgd,:wge,:wgt,:wgp]
+    vals = [ [inputs.wgd[inputs.channels[m].wg]],
+             [inputs.wge[inputs.channels[m].wg]],
+             [inputs.wge[inputs.channels[m].wt]],
+             [inputs.wge[inputs.channels[m].wp]] ]
+    updateInputs!(inputs,fields,vals)
 
     N = inputs.N_ext[2]
     k² = k^2
