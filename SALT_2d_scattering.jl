@@ -480,7 +480,7 @@ end
 
 """
 kₓ = quasi_1d_transverse_x(inputs, m)
-OR
+    OR
 φ = quasi_1d_transverse_x(inputs, m, x)
 """
 function quasi_1d_transverse_x(inputs::InputStruct, m::Int)::Float64
@@ -523,7 +523,7 @@ end
 
 """
 kᵤ = quasi_1d_transverse_y(inputs, m)
-OR
+    OR
 φ = quasi_1d_transverse_y(inputs, m, y)
 """
 function quasi_1d_transverse_y(inputs::InputStruct, m::Int)::Float64
@@ -693,23 +693,22 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         cm = sum(φ.*P)*inputs.dx̄[2]
     elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
         if (inputs.wgd[inputs.channels[m].wg] in ["x", "X"])
+            x = inputs.x₁[1] - inputs.∂R[1]
             kₓ, φy = wg_transverse_y(inputs, k, m)
             if inputs.channels[m].side in ["l", "L", "left", "Left"]
-                x = inputs.x₁[1] - inputs.∂R[1]
                 phs = exp.(+1im*kₓ*x)
                 P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[1,:]
                 ε = inputs.ε_sm[1,inputs.x₂_inds]
             elseif inputs.channels[m].side in ["r", "R", "right", "Right"]
-                x = inputs.x₁[end] - inputs.∂R[2]
                 phs = exp.(-1im*kₓ*x)
                 P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[end,:]
                 ε = inputs.ε_sm[end,inputs.x₂_inds]
             end
-            φ = sqrt(1/kₓ)*phs*reshape(φy[inputs.x̄_inds],inputs.N[1],:)[1,:]
+            φ = sqrt(1/kₓ)*reshape(φy[inputs.x̄_inds],inputs.N[1],:)[1,:]
         elseif inputs.channels[m].wgd in ["y", "Y"]
             error("Haven't written vertical waveguide code yet.")
         end
-        cm = sum(φ.*ε.*P)*inputs.dx̄[2]
+        cm = sqrt(1/kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
     end
 
     return cm
