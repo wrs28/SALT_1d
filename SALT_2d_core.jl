@@ -762,7 +762,7 @@ function updateInputs!(inputs::InputStruct, fields::Array{Symbol,1}, value::Arra
     if  !isempty(fields ∩ [:∂R, :N, :bc, :F, :n₁, :n₂, :ε, :subPixelNum, :geoParams])
 
         F = inputs.F
-        if field == :ε
+        if any(fields .== :ε)
             n₁ = real(sqrt.(inputs.ε))
             n₂ = imag(sqrt.(inputs.ε))
         else
