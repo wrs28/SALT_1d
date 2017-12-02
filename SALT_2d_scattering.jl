@@ -467,11 +467,12 @@ function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
         φ₊ = +sqrt(1/kₓ)*exp(-1im*kₓ*x).*φy
         φ₋ = -sqrt(1/kₓ)*exp(+1im*kₓ*x).*φy
     elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
-        x = inputs.x̄_ext[1] - inputs.∂R[1]
         kₓ, φy = wg_transverse_y(inputs, k, m)
         if inputs.channels[m].side in ["l", "L", "left", "Left"]
+            x = inputs.x̄_ext[1] - inputs.∂R[1]
             φ₊ = +sqrt(1/kₓ)*exp.(+1im*kₓ*x).*φy
-        else
+        elseif inputs.channels[m].side in ["r", "R", "right", "Right"]
+            x = inputs.x̄_ext[1] - inputs.∂R[2]
             φ₊ = +sqrt(1/kₓ)*exp.(-1im*kₓ*x).*φy
         end
     end
