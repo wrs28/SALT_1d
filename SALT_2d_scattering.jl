@@ -574,8 +574,8 @@ function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
     fields = [:wgd,:wge,:wgt,:wgp]
     vals = [ [inputs.wgd[inputs.channels[m].wg]],
              [inputs.wge[inputs.channels[m].wg]],
-             [inputs.wge[inputs.channels[m].wt]],
-             [inputs.wge[inputs.channels[m].wp]] ]
+             [inputs.wgt[inputs.channels[m].wg]],
+             [inputs.wgp[inputs.channels[m].wg]] ]
     updateInputs!(inputs,fields,vals)
 
     N = inputs.N_ext[2]
