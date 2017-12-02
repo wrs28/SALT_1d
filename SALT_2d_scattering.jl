@@ -302,8 +302,6 @@ function computeS_nonlinear(inputs1::InputStruct, k::Array{Complex128,1};
                     # analyze into channels
                     println("here 1")
                     for m2 in m1:M
-                        println(m1)
-                        println(m2)
                         dt=0
                         if inputs.channelBoundaries[m2] in [1,2]
                             t = inputs_s.x₂_ext
@@ -408,8 +406,6 @@ function synthesize_source(inputs::InputStruct, k::Complex128)::
     M₊, M₋ = source_mask(inputs)
 
     for m in 1:length(inputs.channels)
-        println(m)
-        println(inputs.a[m])
         φt₊, φt₋ = incident_modes(inputs, k, m)
         φ₊ += inputs.a[m]*φt₊
         φ₋ += inputs.a[m]*φt₋
