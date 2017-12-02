@@ -639,7 +639,7 @@ function updateInputs!(inputs::InputStruct, field::Symbol, value::Any)::InputStr
 
     end
 
-    if  field in [:∂R, :N, :bc, :F, :n₁, :n₂, :ε, :subPixelNum, :geoParams]
+    if  field in [:∂R, :N, :bc, :F, :n₁, :n₂, :ε, :wge, :wgt, :wgp, :wgd, :subPixelNum, :geoParams]
 
         F = inputs.F
         if field == :ε
@@ -759,7 +759,7 @@ function updateInputs!(inputs::InputStruct, fields::Array{Symbol,1}, value::Arra
 
     end
 
-    if  !isempty(fields ∩ [:∂R, :N, :bc, :F, :n₁, :n₂, :ε, :subPixelNum, :geoParams])
+    if  !isempty(fields ∩ [:∂R, :N, :bc, :F, :n₁, :n₂, :ε, :wge, :wgt, :wgp, :wgd, :subPixelNum, :geoParams])
 
         F = inputs.F
         if any(fields .== :ε)
