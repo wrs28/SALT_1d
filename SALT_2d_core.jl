@@ -674,7 +674,7 @@ function updateInputs!(inputs::InputStruct, field::Symbol, value::Any)::InputStr
 
     return inputs
 end # end of function updateInputs
-function updateInputs!(inputs::InputStruct, fields::Array{Symbol,1}, value::Any)::InputStruct
+function updateInputs!(inputs::InputStruct, fields::Array{Symbol,1}, value::Array{Any,1})::InputStruct
 
     #if !(length(inputs.wgd)==length(inputs.wgp)==length(inputs.wgt)==length(inputs.wge))
     #    error("Waveguide parameters have different lengths.")

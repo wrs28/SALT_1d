@@ -575,7 +575,7 @@ function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
     vals = [ String[inputs.wgd[inputs.channels[m].wg]],
              Float64[inputs.wge[inputs.channels[m].wg]],
              Float64[inputs.wgt[inputs.channels[m].wg]],
-             Float64[inputs.wgp[inputs.channels[m].wg]] ]
+             Float64[inputs.wgp[inputs.channels[m].wg]],0]
     updateInputs!(inputs,fields,vals)
 
     N = inputs.N_ext[2]
