@@ -572,10 +572,10 @@ function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
 
     inputs = open_to_pml_out(inputs1, true)
     fields = [:wgd,:wge,:wgt,:wgp]
-    vals = [ inputs.wgd[inputs.channels[m].wg],
-             inputs.wge[inputs.channels[m].wg],
-             inputs.wgt[inputs.channels[m].wg],
-             inputs.wgp[inputs.channels[m].wg] ]
+    vals = [ [inputs.wgd[inputs.channels[m].wg]],
+             [inputs.wge[inputs.channels[m].wg]],
+             [inputs.wgt[inputs.channels[m].wg]],
+             [inputs.wgp[inputs.channels[m].wg]] ]
     updateInputs!(inputs,fields,vals)
 
     N = inputs.N_ext[2]
