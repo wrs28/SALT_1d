@@ -569,6 +569,9 @@ wg_transverse_y(inputs, m, y)
 function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
     Tuple{Complex128, Array{Complex128,1}}
 
+    wg_pos_ind = 3
+    ind = find( (inputs.r_ext.==(8+inputs.channels[m].wg) )[1,:])[wg_pos_ind]
+
     inputs = open_to_pml_out(inputs1, true)
     fields = [:wgd,:wge,:wgt,:wgp]
     vals = [ String[inputs.wgd[inputs.channels[m].wg]],
@@ -587,6 +590,7 @@ function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
     kₓ²,φ = eigs(∇₂²+εk², nev=nev, sigma=3*k², which = :LM)
     perm = sortperm(kₓ²; by = x -> real(sqrt.(x)), rev=true)
     φ_temp = φ[:,perm[inputs.channels[m].tqn]]
+    φ_temp = φ_temp*( conj(φ_temp[ind])/abs(φ_temp[ind]) ) #makes field positive at wg_pos_ind
     φy = repmat(transpose(φ_temp),inputs.N_ext[1],1)[:]
     φy = φy/sqrt(sum(φ_temp.*ε_sm.*φ_temp)*inputs.dx̄[2])
     return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy)
