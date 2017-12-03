@@ -452,24 +452,24 @@ function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
         φy = quasi_1d_transverse_y.(inputs,m,y)
         kᵤ = quasi_1d_transverse_y(inputs,m)
         kₓ = sqrt(k^2 - kᵤ^2)
-        φ₊ = +sqrt(1/imag(kₓ))*exp(+1im*kₓ*x).*φy
-        φ₋ = -sqrt(1/imag(kₓ))*exp(-1im*kₓ*x).*φy
+        φ₊ = +sqrt(1/real(kₓ))*exp(+1im*kₓ*x).*φy
+        φ₋ = -sqrt(1/real(kₓ))*exp(-1im*kₓ*x).*φy
     elseif bc_sig in ["dOdd", "dOnn", "dOdn", "dOnd"]
         x = inputs.x̄_ext[1] - inputs.∂R[1]
         y = inputs.x̄_ext[2]
         φy = quasi_1d_transverse_y.(inputs,m,y)
         kᵤ = quasi_1d_transverse_y(inputs,m)
         kₓ = sqrt(k^2 - kᵤ^2)
-        φ₊ = +sqrt(1/imag(kₓ))*exp(-1im*kₓ*x).*φy
-        φ₋ = -sqrt(1/imag(kₓ))*exp(+1im*kₓ*x).*φy
+        φ₊ = +sqrt(1/real(kₓ))*exp(-1im*kₓ*x).*φy
+        φ₋ = -sqrt(1/real(kₓ))*exp(+1im*kₓ*x).*φy
     elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
         kₓ, φy = wg_transverse_y(inputs, k, m)
         if inputs.channels[m].side in ["l", "L", "left", "Left"]
             x = inputs.x̄_ext[1] - inputs.∂R[1]
-            φ₊ = +sqrt(1/imag(kₓ))*exp.(+1im*kₓ*x).*φy
+            φ₊ = +sqrt(1/real(kₓ))*exp.(+1im*kₓ*x).*φy
         elseif inputs.channels[m].side in ["r", "R", "right", "Right"]
             x = inputs.x̄_ext[1] - inputs.∂R[2]
-            φ₊ = +sqrt(1/imag(kₓ))*exp.(-1im*kₓ*x).*φy
+            φ₊ = +sqrt(1/real(kₓ))*exp.(-1im*kₓ*x).*φy
         end
     end
 
