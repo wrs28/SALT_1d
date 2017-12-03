@@ -569,10 +569,11 @@ wg_transverse_y(inputs, m, y)
 function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
     Tuple{Complex128, Array{Complex128,1}}
 
+    inputs = open_to_pml_out(inputs1, true)
+
     wg_pos_ind = 3
     ind = find( (inputs.r_ext.==(8+inputs.channels[m].wg) )[1,:])[wg_pos_ind]
 
-    inputs = open_to_pml_out(inputs1, true)
     fields = [:wgd,:wge,:wgt,:wgp]
     vals = [ String[inputs.wgd[inputs.channels[m].wg]],
              Float64[inputs.wge[inputs.channels[m].wg]],
