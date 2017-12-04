@@ -675,7 +675,7 @@ end # end of function laplacians
 analyze_output(inputs, k, ψ, m)
 """
 function analyze_output(inputs::InputStruct, k::Complex128,
-    ψ::Array{Complex{Float64},1}, m::Int)::Complex128
+    ψ::Array{Complex{Float64},1}, m::Int)::Tuple{Complex128,Complex128}
 
     bm = 0.0im # ballistic coefficient
     bc_sig = inputs.bc_sig
