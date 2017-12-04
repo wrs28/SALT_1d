@@ -197,7 +197,8 @@ function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
             updateInputs!(inputs, :a, a)
             ψ₋, ϕ, ζ, inputs_s = compute_scatter(inputs, k; A=ζ)
             for m′ in 1:M
-                S[ii,m,m′,1] = analyze_output(inputs_s, k, ψ₋, m′)
+                 bm, cm = analyze_output(inputs_s, k, ψ₋, m′)
+                 S[ii,m,m′,1] = bm + cm
             end
         end
 
@@ -676,6 +677,7 @@ analyze_output(inputs, k, ψ, m)
 function analyze_output(inputs::InputStruct, k::Complex128,
     ψ::Array{Complex{Float64},1}, m::Int)::Complex128
 
+    bm = 0.0im # ballistic coefficient
     bc_sig = inputs.bc_sig
     if bc_sig in ["Oddd", "Odnn", "Oddn", "Odnd"]
         x = inputs.x₁[1] - inputs.∂R[2]
@@ -697,14 +699,19 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         cm = sum(φ.*P)*inputs.dx̄[2]
     elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
         if (inputs.wgd[inputs.channels[m].wg] in ["x", "X"])
-            x = inputs.x₁[1] - inputs.∂R[1]
             kₓ, φy = wg_transverse_y(inputs, k, m)
             if inputs.channels[m].side in ["l", "L", "left", "Left"]
+                x = inputs.x₁[1] - inputs.∂R[1]
                 phs = exp.(+1im*kₓ*x)
+                xb = inputs.x₁[1] - inputs.∂R[2] # ballistic
+                phsb = exp(-1im*kₓ*xb)
                 P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[1,:]
                 ε = inputs.ε_sm[1,inputs.x₂_inds]
             elseif inputs.channels[m].side in ["r", "R", "right", "Right"]
+                x = inputs.x₁[end] - inputs.∂R[2]
                 phs = exp.(-1im*kₓ*x)
+                xb = inputs.x₁[end] - inputs.∂R[1] # ballistic
+                phsb = exp(+1im*kₓ*xb)
                 P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[end,:]
                 ε = inputs.ε_sm[end,inputs.x₂_inds]
             end
@@ -712,10 +719,18 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         elseif inputs.channels[m].wgd in ["y", "Y"]
             error("Haven't written vertical waveguide code yet.")
         end
+        wg_bool = [inputs.channels[q].wg for q in 1:length(inputs.channels)] .== inputs.channels[m].wg
+        tqn_bool = [inputs.channels[q].tqn for q in 1:length(inputs.channels)] .== inputs.channels[m].tqn
+        side_bool = [inputs.channels[q].side for q in 1:length(inputs.channels)] .!== inputs.channels[m].side
+        wg_ind = find(wg_bool .& tqn_bool .& side_bool)
+        if length(wg_ind) > 1
+            error("Channels not uniquely defined.")
+        end
+        bm = inputs.a[wg_ind[1]]*phsb
         cm = sqrt(kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
     end
 
-    return cm
+    return bm, cm
 end
 
 
