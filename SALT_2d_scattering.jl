@@ -667,15 +667,18 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         cm = sqrt(kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
     elseif (bc_sig in ["OOOO", "IIII"])
         nθ = 1e3
-        R = findmin(abs.(inputs.∂R))[1]
         θ = linspace(0,2π,nθ)
-        P = reshape(ψ,inputs.N_ext[1],:)
-        x = inputs.x̄_ext[1]
-        y = inputs.ȳ_ext[1]
-        r = sqrt.(x.^2 + y.^2 + 1e-20)
-        θ = atan2.(y,x)
+        dθ = θ[2]-θ[1]
+        R = findmin(inputs.∂S₊)[1]
+        p = interpolate(reshape(ψ,inputs.N_ext[1],:), BSpline(Linear()), OnGrid() )
+        X = R*cos.(θ[2:end])
+        Y = R*sin.(θ[2:end])
+        X_int = inputs.N_ext[1]*(X-inputs.∂R_ext[1])/(inputs.∂R_ext[2]-inputs.∂R_ext[1])
+        Y_int = inputs.N_ext[2]*(Y-inputs.∂R_ext[3])/(inputs.∂R_ext[4]-inputs.∂R_ext[3])
+        P = [p[X_int[ii],Y_int[ii]] for ii in 1:length(nθ-1)]
         q = inputs.channels[m].tqn
-        φ₊ = exp(1im*q*θ).*hankelh2(q,k*r)/2
+        cm = 2*sum(exp.(-1im*q*θ).*P)*dθ./hankelh1(q,k*R)
+        bm = 0.
     end
 
     return bm, cm

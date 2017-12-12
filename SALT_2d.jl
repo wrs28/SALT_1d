@@ -9,6 +9,7 @@ computeUZR_NL2_parallel, compute_scatter, computeS, analyze_output, P_wait)
 
 using NLsolve
 using Formatting
+using Interpolations
 
 ################################################################################
 include("SALT_2d_core.jl")
