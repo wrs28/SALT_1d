@@ -13,18 +13,17 @@
     return region
 end
 
-n = 2.
-n₁ = [ 1.,  n]
+n₁ = [ 1.,  2.]
 n₂ = [ 0., 0.]
 F = [0.0, 0.0, 0.0]
 
 scatteringRegions = [2]
 geoParams = Float64[.41]
 
-wgd = ["x", "x"]
-wgp = [+0.45,-0.45]
-wgt = [ 0.025, 0.025]
-wgn = [  2.0, 2.0]
+wgd = String[] #["x", "x"]
+wgp = Float64[]#[+0.45,-0.45]
+wgt = Float64[]#[ 0.025, 0.025]
+wgn = Float64[]#[  2.0, 2.0]
 wge = wgn.^2
 
 ∂R  =  [-.65,  .65,   -.65,   .65]
@@ -36,12 +35,13 @@ k₀ = complex(20.)
 γ⟂ = 1e8
 D₀ = 0.00
 
-∂S  =  [-.55,  .55,   -.55,   .55]
+∂S₊ =  [-.55,  .55,   -.55,   .55]
+∂S₋ = .01
 a = Complex128[1.,0.,0.,0.]
-channels = [ChannelStruct(1,"l",1),
-            ChannelStruct(1,"r",1),
-            ChannelStruct(2,"l",1),
-            ChannelStruct(2,"r",1)]
+channels = [ChannelStruct( 0,0,""),
+            ChannelStruct( 1,0,""),
+            ChannelStruct(-1,0,""),
+            ChannelStruct( 2,0,"")]
 
 subPixelNum = 10
 coord = "xy" # XY, xy, Cart, cart, Cartesian, cartesian, rθ, rtheta, polar, Polar

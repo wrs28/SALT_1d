@@ -2,9 +2,9 @@
 inc = ChannelStruct(wg, side, tqn)
 """
 mutable struct ChannelStruct
+    tqn::Int        # transverse quantum number
     wg::Int         # waveguide number
     side::String    # side
-    tqn::Int        # transverse quantum number
 end
 
 
@@ -32,7 +32,8 @@ mutable struct InputStruct
     x₂_inds::Array{Int,1}
     ∂R::Array{Float64,1}    # domain boundary
     ∂R_ext::Array{Float64,1}# extended domain boundary
-    ∂S::Array{Float64,1}    # surface of last scattering
+    ∂S₊::Array{Float64,1}   # emitting equivalent source surface
+    ∂S₋::Float64            # absorbing equivalent source surface radius
     r::Array{Int,2}
     r_ext::Array{Int,2}
     n₁::Array{Float64,1}    # real part of index for each region
@@ -40,12 +41,12 @@ mutable struct InputStruct
     ɛ::Array{Complex128,1}  # dielectric in each region
     ɛ_ext::Array{Complex128,1}  # dielectric in extended regions
     ɛ_sm::Array{Complex128,2}   # smoothed dielectric in extended regions
-    F::Array{Float64,1}
-    F_ext::Array{Float64,1}
-    F_sm::Array{Float64,2}
-    ω₀::Complex128
-    k₀::Complex128
-    γ⟂::Float64
+    F::Array{Float64,1}     # pump profile in each region
+    F_ext::Array{Float64,1} # pump profile in extended regions
+    F_sm::Array{Float64,2}  # smoothed pump profile in extended regions
+    ω₀::Complex128          # atomic gain center frequency
+    k₀::Complex128          # atomic gain center wave number
+    γ⟂::Float64             # atomic depolarization rate
     D₀::Float64
     a::Array{Complex128,1}
     bc::Array{String,1}
@@ -113,12 +114,13 @@ end # end of function grad
 
 
 """
-∇² = laplacian(k, inputs)
+∇₁², ∇₂² = laplacians(k, inputs)
 
     Computes 2-dim laplacian based on parameters and boundary conditions given in
     INPUTS, evaluated at (complex) frequency K.
 """
-function laplacian(k::Complex128, inputs::InputStruct)::SparseMatrixCSC{Complex128,Int}
+function laplacians(k::Complex128, inputs::InputStruct)::
+    Tuple{SparseMatrixCSC{Complex128,Int},SparseMatrixCSC{Complex128,Int}}
 
     # definitions block#
     ∂R = inputs.∂R_ext
@@ -153,6 +155,61 @@ function laplacian(k::Complex128, inputs::InputStruct)::SparseMatrixCSC{Complex1
     ∇₂² = -(s₂₂*transpose(∇₂)*s₂₁*∇₂)
     ind = [1, N₁, 1, N₂, 1]
 
+    for i in 1:4
+        if i ≤ 2
+            if bc[i] in ["O", "I"]
+                ∇₁²[ind[i],ind[i]]   += -2/dx₁^2
+            elseif bc[i] == "d"
+                ∇₁²[ind[i],ind[i]]   += -2/dx₁^2
+            elseif bc[i] == "n"
+                ∇₁²[ind[i],ind[i]]   += 0
+            elseif bc[i] == "p"
+                ∇₁²[ind[i],ind[i]]   += -1/dx₁^2
+                ∇₁²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓ₁*k₁)/dx₁^2
+            end
+        else
+            if bc[i] in ["O", "I"]
+                ∇₂²[ind[i],ind[i]]   += -2/dx₂^2
+            elseif bc[i] == "d"
+                ∇₂²[ind[i],ind[i]]   += -2/dx₂^2
+            elseif bc[i] == "n"
+                ∇₂²[ind[i],ind[i]]   += 0
+            elseif bc[i] == "p"
+                ∇₂²[ind[i],ind[i]]   += -1/dx₂^2
+                ∇₂²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓ₂*k₂)/dx₂^2
+            end
+        end
+    end
+
+    return ∇₁², ∇₂²
+end # end of function laplacians
+
+
+"""
+∇² = laplacian(k, inputs)
+
+    Computes 2-dim laplacian based on parameters and boundary conditions given in
+    INPUTS, evaluated at (complex) frequency K.
+"""
+function laplacian(k::Complex128, inputs::InputStruct)::SparseMatrixCSC{Complex128,Int}
+
+    # definitions block#
+    ∂R = inputs.∂R_ext
+    x₁ = inputs.x₁_ext
+    x₂ = inputs.x₂_ext
+    bc = inputs.bc
+
+    ℓ₁ = inputs.ℓ_ext[1]
+    ℓ₂ = inputs.ℓ_ext[2]
+
+    N₁ = inputs.N_ext[1]
+    N₂ = inputs.N_ext[2]
+
+    dx₁ = inputs.dx̄[1]
+    dx₂ = inputs.dx̄[2]
+
+    ∇₁², ∇₂² = laplacians(k,inputs)
+
     if any(inputs.bc .== "o")
 
         if any(inputs.bc[1:2] .== "o") && !(bc[3:4]⊆["d", "n"])
@@ -179,16 +236,7 @@ function laplacian(k::Complex128, inputs::InputStruct)::SparseMatrixCSC{Complex1
 
     for i in 1:4
         if i ≤ 2
-            if bc[i] in ["O", "I"]
-                ∇₁²[ind[i],ind[i]]   += -2/dx₁^2
-            elseif bc[i] == "d"
-                ∇₁²[ind[i],ind[i]]   += -2/dx₁^2
-            elseif bc[i] == "n"
-                ∇₁²[ind[i],ind[i]]   += 0
-            elseif bc[i] == "p"
-                ∇₁²[ind[i],ind[i]]   += -1/dx₁^2
-                ∇₁²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓ₁*k₁)/dx₁^2
-            elseif bc[i] == "o"
+            if bc[i] == "o"
                 for m in 1:m_cutoff
                     if m in inputs.input_modes[i]
                         M = +1
@@ -201,16 +249,7 @@ function laplacian(k::Complex128, inputs::InputStruct)::SparseMatrixCSC{Complex1
                 Φ[:,:,i] = -(eye(Complex128,N⟂,N⟂)+Φ[:,:,i])\(Φ[:,:,i]*2/dx₁^2)
             end
         else
-            if bc[i] in ["O", "I"]
-                ∇₂²[ind[i],ind[i]]   += -2/dx₂^2
-            elseif bc[i] == "d"
-                ∇₂²[ind[i],ind[i]]   += -2/dx₂^2
-            elseif bc[i] == "n"
-                ∇₂²[ind[i],ind[i]]   += 0
-            elseif bc[i] == "p"
-                ∇₂²[ind[i],ind[i]]   += -1/dx₂^2
-                ∇₂²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓ₂*k₂)/dx₂^2
-            elseif bc[i] == "o"
+            if bc[i] == "o"
                 for m in 1:m_cutoff
                     if m in inputs.input_modes[i]
                         M = +1
@@ -470,7 +509,8 @@ function processInputs(
     bk::Array{Complex{Float64},1},
     input_modes::Array{Array{Int,1},1},
 
-    ∂S::Array{Float64,1},
+    ∂S₊::Array{Float64,1},
+    ∂S₋::Float64,
     channels::Array{ChannelStruct,1},
     a::Array{Complex128,1},
 
@@ -542,7 +582,7 @@ function processInputs(
     r = reshape(r_ext[x̄_inds],N[1],N[2])
 
     inputs = InputStruct(coord, N, N_ext, ℓ, ℓ_ext, x̄, x̄_ext, x̄_inds, dx̄, x₁, x₁_ext, x₁_inds,
-        x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, ∂S, r, r_ext, n₁, n₂, ɛ, ɛ_ext, ɛ_sm, F, F_ext, F_sm,
+        x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, ∂S₊, ∂S₋, r, r_ext, n₁, n₂, ɛ, ɛ_ext, ɛ_sm, F, F_ext, F_sm,
         ω₀, k₀, γ⟂, D₀, a, bc, prod(bc), bk, input_modes, scatteringRegions,
         channels, geometry, geoParams, wgd, wgp, wgt, wge, subPixelNum)
 
@@ -551,7 +591,7 @@ end # end of function processInputs
 
 
 """
-inputs = updateInputs(inputs)
+updateInputs!(inputs::InputStruct, fields, value)
 
     If changes were made to the ∂R, N, k₀, k, F, ɛ, Γ, bc, a, b, run updateInputs to
     propagate these changes through the system.

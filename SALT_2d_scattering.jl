@@ -431,8 +431,8 @@ end
 source_mask(inputs)
 """
 function source_mask(inputs::InputStruct)::Tuple{Array{Bool,1},Array{Bool,1}}
-    M₊ = (inputs.∂S[1] .≤ inputs.x̄_ext[1] .≤ inputs.∂S[2]) .& (inputs.∂S[3] .≤ inputs.x̄_ext[2] .≤ inputs.∂S[4])
-    M₋ = (inputs.∂R[1] .≤ inputs.x̄_ext[1] .≤ inputs.∂R[2]) .& (inputs.∂R[3] .≤ inputs.x̄_ext[2] .≤ inputs.∂R[4])
+    M₊ = (inputs.∂S₊[1] .≤ inputs.x̄_ext[1] .≤ inputs.∂S₊[2]) .& (inputs.∂S₊[3] .≤ inputs.x̄_ext[2] .≤ inputs.∂S₊[4]) .& (inputs.∂S₋ .≤ sqrt.(inputs.x̄_ext[1].^2 + inputs.x̄_ext[2].^2))
+    M₋ = (inputs.∂R[1] .≤ inputs.x̄_ext[1] .≤ inputs.∂R[2]) .& (inputs.∂R[3] .≤ inputs.x̄_ext[2] .≤ inputs.∂R[4]) .& (inputs.∂S₋ .≤ sqrt.(inputs.x̄_ext[1].^2 + inputs.x̄_ext[2].^2))
     return M₊, M₋
 end
 
@@ -472,6 +472,15 @@ function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
             x = inputs.x̄_ext[1] - inputs.∂R[2]
             φ₊ = +sqrt(1/real(kₓ))*exp.(-1im*kₓ*x).*φy
         end
+    elseif (bc_sig in ["OOOO", "IIII"])
+        x = inputs.x̄_ext[1]
+        y = inputs.x̄_ext[2]
+        r = sqrt.(x.^2 + y.^2)
+        r_inds = r .≥ inputs.∂S₋
+        θ = atan2.(y,x)
+        q = inputs.channels[m].tqn
+        φ₊[r_inds] = exp.(1im*q*θ[r_inds]).*hankelh2.(q,k*r[r_inds])/2
+        φ₋[r_inds] = exp.(1im*q*θ[r_inds]).*hankelh1.(q,k*r[r_inds])/2
     end
 
     return φ₊, φ₋
@@ -600,78 +609,6 @@ end
 
 
 """
-∇₁², ∇₂² = laplacians(k, inputs)
-
-    Computes 2-dim laplacian based on parameters and boundary conditions given in
-    INPUTS, evaluated at (complex) frequency K.
-"""
-function laplacians(k::Complex128, inputs::InputStruct)::
-    Tuple{SparseMatrixCSC{Complex128,Int},SparseMatrixCSC{Complex128,Int}}
-
-    # definitions block#
-    ∂R = inputs.∂R_ext
-    x₁ = inputs.x₁_ext
-    x₂ = inputs.x₂_ext
-    bc = inputs.bc
-
-    k₁ = inputs.bk[1]
-    k₂ = inputs.bk[2]
-
-    ℓ₁ = inputs.ℓ_ext[1]
-    ℓ₂ = inputs.ℓ_ext[2]
-
-    N₁ = inputs.N_ext[1]
-    N₂ = inputs.N_ext[2]
-
-    dx₁ = inputs.dx̄[1]
-    dx₂ = inputs.dx̄[2]
-
-    Σ₁,Σ₂ = σ(inputs)
-
-    ∇₁ = grad_1d(N₁-1,dx₁)
-    ∇₂ = grad_1d(N₂-1,dx₂)
-
-    s₁₁ = sparse(1:N₁-1,1:N₁-1,1./(1+.5im*(Σ₁[1:end-1] + Σ₁[2:end])/real(k)),N₁-1,N₁-1)
-    s₁₂ = sparse(1:N₁,1:N₁,1./(1+1im*(Σ₁)/real(k)),N₁,N₁)
-
-    s₂₁ = sparse(1:N₂-1,1:N₂-1,1./(1+.5im*(Σ₂[1:end-1] + Σ₂[2:end])/real(k)),N₂-1,N₂-1)
-    s₂₂ = sparse(1:N₂,1:N₂,1./(1+1im*(Σ₂)/real(k)),N₂,N₂)
-
-    ∇₁² = -(s₁₂*transpose(∇₁)*s₁₁*∇₁)
-    ∇₂² = -(s₂₂*transpose(∇₂)*s₂₁*∇₂)
-    ind = [1, N₁, 1, N₂, 1]
-
-    for i in 1:4
-        if i ≤ 2
-            if bc[i] in ["O", "I"]
-                ∇₁²[ind[i],ind[i]]   += -2/dx₁^2
-            elseif bc[i] == "d"
-                ∇₁²[ind[i],ind[i]]   += -2/dx₁^2
-            elseif bc[i] == "n"
-                ∇₁²[ind[i],ind[i]]   += 0
-            elseif bc[i] == "p"
-                ∇₁²[ind[i],ind[i]]   += -1/dx₁^2
-                ∇₁²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓ₁*k₁)/dx₁^2
-            end
-        else
-            if bc[i] in ["O", "I"]
-                ∇₂²[ind[i],ind[i]]   += -2/dx₂^2
-            elseif bc[i] == "d"
-                ∇₂²[ind[i],ind[i]]   += -2/dx₂^2
-            elseif bc[i] == "n"
-                ∇₂²[ind[i],ind[i]]   += 0
-            elseif bc[i] == "p"
-                ∇₂²[ind[i],ind[i]]   += -1/dx₂^2
-                ∇₂²[ind[i],ind[i+1]] += +exp((-1)^(i+1)*1im*ℓ₂*k₂)/dx₂^2
-            end
-        end
-    end
-
-    return ∇₁², ∇₂²
-end # end of function laplacians
-
-
-"""
 analyze_output(inputs, k, ψ, m)
 """
 function analyze_output(inputs::InputStruct, k::Complex128,
@@ -728,6 +665,17 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         end
         bm = inputs.a[wg_ind[1]]*phsb
         cm = sqrt(kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
+    elseif (bc_sig in ["OOOO", "IIII"])
+        nθ = 1e3
+        R = findmin(abs.(inputs.∂R))[1]
+        θ = linspace(0,2π,nθ)
+        P = reshape(ψ,inputs.N_ext[1],:)
+        x = inputs.x̄_ext[1]
+        y = inputs.ȳ_ext[1]
+        r = sqrt.(x.^2 + y.^2 + 1e-20)
+        θ = atan2.(y,x)
+        q = inputs.channels[m].tqn
+        φ₊ = exp(1im*q*θ).*hankelh2(q,k*r)/2
     end
 
     return bm, cm
