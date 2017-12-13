@@ -431,8 +431,16 @@ end
 source_mask(inputs)
 """
 function source_mask(inputs::InputStruct)::Tuple{Array{Bool,1},Array{Bool,1}}
-    M₊ = (inputs.∂S₊[1] .≤ inputs.x̄_ext[1] .≤ inputs.∂S₊[2]) .& (inputs.∂S₊[3] .≤ inputs.x̄_ext[2] .≤ inputs.∂S₊[4]) .& (inputs.∂S₋ .≤ sqrt.(inputs.x̄_ext[1].^2 + inputs.x̄_ext[2].^2))
-    M₋ = (inputs.∂R[1] .≤ inputs.x̄_ext[1] .≤ inputs.∂R[2]) .& (inputs.∂R[3] .≤ inputs.x̄_ext[2] .≤ inputs.∂R[4]) .& (inputs.∂S₋ .≤ sqrt.(inputs.x̄_ext[1].^2 + inputs.x̄_ext[2].^2))
+    ∂S = inputs.∂S
+    ∂R = inputs.∂R
+
+    if length(∂S)>1
+        M₊ = (∂S[1] .≤ inputs.x̄_ext[1] .≤ ∂S[2]) .& (∂S[3] .≤ inputs.x̄_ext[2] .≤ ∂S[4])
+    elseif length(∂S)==1
+        r = sqrt.(inputs.x̄_ext[1].^2 + inputs.x̄_ext[2].^2)
+        M₊ = r. < ∂S[1]
+    end
+    M₋ = (∂R[1] .≤ inputs.x̄_ext[1] .≤ ∂R[2]) .& (∂R[3] .≤ inputs.x̄_ext[2] .≤ ∂R[4])
     return M₊, M₋
 end
 
@@ -476,11 +484,9 @@ function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
         x = inputs.x̄_ext[1]
         y = inputs.x̄_ext[2]
         r = sqrt.(x.^2 + y.^2)
-        r_inds = r .≥ inputs.∂S₋
         θ = atan2.(y,x)
         q = inputs.channels[m].tqn
-        φ₊[r_inds] = exp.(1im*q*θ[r_inds]).*hankelh2.(q,k*r[r_inds])/2
-        φ₋[r_inds] = exp.(1im*q*θ[r_inds]).*hankelh1.(q,k*r[r_inds])/2
+        φ₊[r_inds] = exp.(1im*q*θ).*besselj.(q,k*r)
     end
 
     return φ₊, φ₋
@@ -677,7 +683,7 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         Y_int = inputs.N_ext[2]*(Y-inputs.∂R_ext[3])/(inputs.∂R_ext[4]-inputs.∂R_ext[3])
         P = [p[X_int[ii],Y_int[ii]] for ii in 1:(nθ-1)]
         q = inputs.channels[m].tqn
-        cm = sum(exp.(-1im*q*θ[1:end-1]).*P)*dθ./hankelh1(q,k*R)/π
+        cm = sum(exp.(-1im*q*θ[1:end-1]).*P)*dθ./(2π*hankelh1(q,k*R)/2)
         bm = inputs.a[m]
     end
 
