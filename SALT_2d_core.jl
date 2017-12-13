@@ -32,8 +32,7 @@ mutable struct InputStruct
     x₂_inds::Array{Int,1}
     ∂R::Array{Float64,1}    # domain boundary
     ∂R_ext::Array{Float64,1}# extended domain boundary
-    ∂S₊::Array{Float64,1}   # emitting equivalent source surface
-    ∂S₋::Float64            # absorbing equivalent source surface radius
+    ∂S::Array{Float64,1}   # emitting equivalent source surface
     r::Array{Int,2}
     r_ext::Array{Int,2}
     n₁::Array{Float64,1}    # real part of index for each region
@@ -509,8 +508,7 @@ function processInputs(
     bk::Array{Complex{Float64},1},
     input_modes::Array{Array{Int,1},1},
 
-    ∂S₊::Array{Float64,1},
-    ∂S₋::Float64,
+    ∂S::Array{Float64,1},
     channels::Array{ChannelStruct,1},
     a::Array{Complex128,1},
 
@@ -582,7 +580,7 @@ function processInputs(
     r = reshape(r_ext[x̄_inds],N[1],N[2])
 
     inputs = InputStruct(coord, N, N_ext, ℓ, ℓ_ext, x̄, x̄_ext, x̄_inds, dx̄, x₁, x₁_ext, x₁_inds,
-        x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, ∂S₊, ∂S₋, r, r_ext, n₁, n₂, ɛ, ɛ_ext, ɛ_sm, F, F_ext, F_sm,
+        x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, ∂S, r, r_ext, n₁, n₂, ɛ, ɛ_ext, ɛ_sm, F, F_ext, F_sm,
         ω₀, k₀, γ⟂, D₀, a, bc, prod(bc), bk, input_modes, scatteringRegions,
         channels, geometry, geoParams, wgd, wgp, wgt, wge, subPixelNum)
 
