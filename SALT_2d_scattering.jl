@@ -671,9 +671,9 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         θ = linspace(0,2π,nθ)
         dθ = θ[2]-θ[1]
         R = findmin(inputs.∂R)[1]
-        p = interpolate(reshape(ψ_sep,inputs.N_ext[1],:), BSpline(Linear()), OnGrid() )
-        X = R*cos.(θ[2:end])
-        Y = R*sin.(θ[2:end])
+        p = interpolate(reshape(ψ,inputs.N_ext[1],:), BSpline(Linear()), OnGrid() )
+        X = R*cos.(θ[1:end-1])
+        Y = R*sin.(θ[1:end-1])
         X_int = inputs.N_ext[1]*(X-inputs.∂R_ext[1])/(inputs.∂R_ext[2]-inputs.∂R_ext[1])
         Y_int = inputs.N_ext[2]*(Y-inputs.∂R_ext[3])/(inputs.∂R_ext[4]-inputs.∂R_ext[3])
         P = [p[X_int[ii],Y_int[ii]] for ii in 1:(nθ-1)]
