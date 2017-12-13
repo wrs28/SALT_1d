@@ -666,19 +666,20 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         bm = inputs.a[wg_ind[1]]*phsb
         cm = sqrt(kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
     elseif (bc_sig in ["OOOO", "IIII"])
-        nθ = 1e3
+        println("hi")
+        nθ = Int(5e2)
         θ = linspace(0,2π,nθ)
         dθ = θ[2]-θ[1]
-        R = findmin(inputs.∂S₊)[1]
-        p = interpolate(reshape(ψ,inputs.N_ext[1],:), BSpline(Linear()), OnGrid() )
+        R = findmin(inputs.∂R)[1]
+        p = interpolate(reshape(ψ_sep,inputs.N_ext[1],:), BSpline(Linear()), OnGrid() )
         X = R*cos.(θ[2:end])
         Y = R*sin.(θ[2:end])
         X_int = inputs.N_ext[1]*(X-inputs.∂R_ext[1])/(inputs.∂R_ext[2]-inputs.∂R_ext[1])
         Y_int = inputs.N_ext[2]*(Y-inputs.∂R_ext[3])/(inputs.∂R_ext[4]-inputs.∂R_ext[3])
-        P = [p[X_int[ii],Y_int[ii]] for ii in 1:length(nθ-1)]
+        P = [p[X_int[ii],Y_int[ii]] for ii in 1:(nθ-1)]
         q = inputs.channels[m].tqn
-        cm = 2*sum(exp.(-1im*q*θ).*P)*dθ./hankelh1(q,k*R)
-        bm = 0.
+        cm = 2*sum(exp.(-1im*q*θ[1:end-1]).*P)*dθ./hankelh1(q,k*R)
+        bm = inputs.a[m]
     end
 
     return bm, cm
