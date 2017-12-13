@@ -486,7 +486,7 @@ function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
         r = sqrt.(x.^2 + y.^2)
         θ = atan2.(y,x)
         q = inputs.channels[m].tqn
-        φ₊[r_inds] = exp.(1im*q*θ).*besselj.(q,k*r)
+        φ₊ = exp.(1im*q*θ).*besselj.(q,k*r)
     end
 
     return φ₊, φ₋
