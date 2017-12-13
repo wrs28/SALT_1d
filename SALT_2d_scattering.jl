@@ -666,7 +666,6 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         bm = inputs.a[wg_ind[1]]*phsb
         cm = sqrt(kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
     elseif (bc_sig in ["OOOO", "IIII"])
-        println("hi")
         nθ = Int(5e2)
         θ = linspace(0,2π,nθ)
         dθ = θ[2]-θ[1]
