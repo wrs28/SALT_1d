@@ -438,7 +438,7 @@ function source_mask(inputs::InputStruct)::Tuple{Array{Bool,1},Array{Bool,1}}
         M₊ = (∂S[1] .≤ inputs.x̄_ext[1] .≤ ∂S[2]) .& (∂S[3] .≤ inputs.x̄_ext[2] .≤ ∂S[4])
     elseif length(∂S)==1
         r = sqrt.(inputs.x̄_ext[1].^2 + inputs.x̄_ext[2].^2)
-        M₊ = r. < ∂S[1]
+        M₊ = r .< ∂S[1]
     end
     M₋ = (∂R[1] .≤ inputs.x̄_ext[1] .≤ ∂R[2]) .& (∂R[3] .≤ inputs.x̄_ext[2] .≤ ∂R[4])
     return M₊, M₋
