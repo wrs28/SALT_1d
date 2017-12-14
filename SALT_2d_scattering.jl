@@ -672,20 +672,66 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         bm = inputs.a[wg_ind[1]]*phsb
         cm = sqrt(kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
     elseif (bc_sig in ["OOOO", "IIII"])
-        nθ = Int(5e2)
-        θ = linspace(0,2π,nθ)
-        dθ = θ[2]-θ[1]
-        R = (findmin(abs.(inputs.∂R))[1] + findmin(abs.(inputs.∂S))[1])/2
-        p = interpolate(reshape(ψ,inputs.N_ext[1],:), BSpline(Linear()), OnGrid() )
-        X = R*cos.(θ[1:end-1])
-        Y = R*sin.(θ[1:end-1])
-        X_int = inputs.N_ext[1]*(X-inputs.∂R_ext[1])/(inputs.∂R_ext[2]-inputs.∂R_ext[1])
-        Y_int = inputs.N_ext[2]*(Y-inputs.∂R_ext[3])/(inputs.∂R_ext[4]-inputs.∂R_ext[3])
-        P = [p[X_int[ii],Y_int[ii]] for ii in 1:(nθ-1)]
-        q = inputs.channels[m].tqn
-        cm = sum(exp.(-1im*q*θ[1:end-1]).*P)*dθ./(2π*hankelh1(q,k*R)/2)
-        bm = inputs.a[m]
+        bm, cm = analyze_into_angular_momentum(inputs, k, ψ, m, "out")
     end
+
+    return bm, cm
+end
+
+
+"""
+analyze_input(inputs, k, ψ, m)
+"""
+function analyze_input(inputs::InputStruct, k::Complex128,
+    ψ::Array{Complex{Float64},1}, m::Int)::Tuple{Complex128,Complex128}
+
+    bm = 0.0im # ballistic coefficient
+    bc_sig = inputs.bc_sig
+    if bc_sig in ["Oddd", "Odnn", "Oddn", "Odnd"]
+        cm = 0.0im
+    elseif bc_sig in ["dOdd", "dOnn", "dOdn", "dOnd"]
+        cm = 0.0im
+    elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
+        cm = 0.0im
+    elseif (bc_sig in ["OOOO", "IIII"])
+        bm, cm = analyze_into_angular_momentum(inputs, k, ψ, m, "in")
+    end
+
+    return bm, cm
+end
+
+
+################################################################################
+### Analyzer Subroutines
+################################################################################
+
+"""
+analyze_into_angular_momentum(inputs, k, ψ, m, direction)
+"""
+function analyze_into_angular_momentum(inputs::InputStruct, k::Complex128,
+    ψ::Array{Complex{Float64},1}, m::Int, direction::String)::Tuple{Complex128,Complex128}
+
+    nθ = Int(1e3)
+    θ = linspace(0,2π,nθ)
+    dθ = θ[2]-θ[1]
+    R = (findmin(abs.(inputs.∂R))[1] + findmin(abs.(inputs.∂S))[1])/2
+    p = interpolate(reshape(ψ,inputs.N_ext[1],:), BSpline(Linear()), OnGrid() )
+    X = R*cos.(θ[1:end-1])
+    Y = R*sin.(θ[1:end-1])
+    X_int = inputs.N_ext[1]*(X-inputs.∂R_ext[1])/(inputs.∂R_ext[2]-inputs.∂R_ext[1])
+    Y_int = inputs.N_ext[2]*(Y-inputs.∂R_ext[3])/(inputs.∂R_ext[4]-inputs.∂R_ext[3])
+    P = [p[X_int[ii],Y_int[ii]] for ii in 1:(nθ-1)]
+    q = inputs.channels[m].tqn
+
+    if direction == "in"
+        cm = sum(exp.(-1im*q*θ[1:end-1]).*P)*dθ./(2π*hankelh2(q,k*R)/2)
+    elseif direction == "out"
+        cm = sum(exp.(-1im*q*θ[1:end-1]).*P)*dθ./(2π*hankelh1(q,k*R)/2)
+    else
+        error("Invalid direction.")
+    end
+
+    bm = inputs.a[m]
 
     return bm, cm
 end
