@@ -674,7 +674,8 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         bm = inputs.a[wg_ind[1]]*phsb
         cm = sqrt(kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
     elseif (bc_sig in ["OOOO", "IIII"])
-        bm, cm = analyze_into_angular_momentum(inputs, k, ψ, m, "out")
+        cm = analyze_into_angular_momentum(inputs, k, ψ, m, "out")
+        bm = inputs.a[m]
     end
 
     return bm, cm
