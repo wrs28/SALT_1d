@@ -685,7 +685,7 @@ end
 analyze_input(inputs, k, ψ, m)
 """
 function analyze_input(inputs::InputStruct, k::Complex128,
-    ψ::Array{Complex{Float64},1}, m::Int)::Tuple{Complex128,Complex128}
+    ψ::Array{Complex{Float64},1}, m::Int)::Complex128
 
     bc_sig = inputs.bc_sig
     if bc_sig in ["Oddd", "Odnn", "Oddn", "Odnd"]
