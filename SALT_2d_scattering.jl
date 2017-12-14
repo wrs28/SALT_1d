@@ -487,6 +487,8 @@ function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
         θ = atan2.(y,x)
         q = inputs.channels[m].tqn
         φ₊ = exp.(1im*q*θ).*besselj.(q,k*r)
+        M₊, M₋ = source_mask(inputs)
+        φ₋[M₋ .& .!M₊] = exp.(1im*q*θ[M₋ .& .!M₊]).hankelh1.(q,k*r[M₋ .& .!M₊])/2
     end
 
     return φ₊, φ₋
@@ -685,7 +687,6 @@ analyze_input(inputs, k, ψ, m)
 function analyze_input(inputs::InputStruct, k::Complex128,
     ψ::Array{Complex{Float64},1}, m::Int)::Tuple{Complex128,Complex128}
 
-    bm = 0.0im # ballistic coefficient
     bc_sig = inputs.bc_sig
     if bc_sig in ["Oddd", "Odnn", "Oddn", "Odnd"]
         cm = 0.0im
@@ -694,10 +695,10 @@ function analyze_input(inputs::InputStruct, k::Complex128,
     elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
         cm = 0.0im
     elseif (bc_sig in ["OOOO", "IIII"])
-        bm, cm = analyze_into_angular_momentum(inputs, k, ψ, m, "in")
+        cm = analyze_into_angular_momentum(inputs, k, ψ, m, "in")
     end
 
-    return bm, cm
+    return cm
 end
 
 
@@ -709,7 +710,7 @@ end
 analyze_into_angular_momentum(inputs, k, ψ, m, direction)
 """
 function analyze_into_angular_momentum(inputs::InputStruct, k::Complex128,
-    ψ::Array{Complex{Float64},1}, m::Int, direction::String)::Tuple{Complex128,Complex128}
+    ψ::Array{Complex{Float64},1}, m::Int, direction::String)::Complex128
 
     nθ = Int(1e3)
     θ = linspace(0,2π,nθ)
@@ -731,9 +732,7 @@ function analyze_into_angular_momentum(inputs::InputStruct, k::Complex128,
         error("Invalid direction.")
     end
 
-    bm = inputs.a[m]
-
-    return bm, cm
+    return cm
 end
 
 
