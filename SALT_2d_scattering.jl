@@ -488,7 +488,7 @@ function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
         q = inputs.channels[m].tqn
         φ₊ = exp.(1im*q*θ).*besselj.(q,k*r)
         M₊, M₋ = source_mask(inputs)
-        φ₋[M₋ .& .!M₊] = exp.(1im*q*θ[M₋ .& .!M₊]).hankelh1.(q,k*r[M₋ .& .!M₊])/2
+        φ₋[M₋ .& .!M₊] = exp.(1im*q*θ[M₋ .& .!M₊]).*hankelh1.(q,k*r[M₋ .& .!M₊])/2
     end
 
     return φ₊, φ₋
