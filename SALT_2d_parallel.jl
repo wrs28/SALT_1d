@@ -35,7 +35,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
 
     for i in 1:length(inds)
         for f in 1:length(fields)
-            if !isempty(size(getfield(inputs,fields[f])))
+            if !isempty(size(getfield(inputs,fields[f]))) & !isempty(field_inds)
                 params_temp = getfield(inputs,fields[f])
                 params_temp[field_inds[f]] = params[f][subs[f][i]]
                 updateInputs!(inputs,fields[f],params_temp)
