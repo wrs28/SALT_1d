@@ -27,7 +27,7 @@ end
 computeK_L_core!(K, inputs, k, fields, field_inds, params, nk, F, truncate, ψ_init)
 """
 function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
-    fields::Array{Symbol,1}, field_inds::Array{Int,1}, params::Array{Array{Float64,1},1},
+    fields::Array{Symbol,1}, field_inds::Array{Array{Int,1},1}, params::Array{Array{Float64,1},1},
     nk::Int, F::Array{Float64,1}, truncate::Bool, ψ_init::Array{Complex128,1})::SharedArray
 
     inds = p_range(K)
@@ -35,7 +35,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
 
     for i in 1:length(inds)
         for f in 1:length(fields)
-            if !isempty(size(getfield(inputs,fields[f]))) & !isempty(field_inds)
+            if !isempty(size(getfield(inputs,fields[f]))) & !isempty(field_inds[f])
                 params_temp = getfield(inputs,fields[f])
                 params_temp[field_inds[f]] = params[f][subs[f][i]]
                 updateInputs!(inputs,fields[f],params_temp)
