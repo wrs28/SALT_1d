@@ -56,7 +56,7 @@ computeZero_L(inputs, k, fields, field_inds, params; nz=1, F=[1.], truncate=fals
     does parallel computation of computeZero_L over fields[field_inds]=params
 """
 function computeZero_L(inputs1::InputStruct, k::Union{Complex128,Float64,Int},
-    fields::Array{Symbol,1}, field_inds::Array{Int,1}, params::Array{Array{Float64,1},1};
+    fields::Array{Symbol,1}, field_inds::Array{Array{Int,1},1}, params::Array{Array{Float64,1},1};
     nz::Int=1, F::Array{Float64,1}=[1.], truncate::Bool=false,
     ψ_init::Array{Complex128,1}=Complex128[])::Tuple{SharedArray,Channel}
 
