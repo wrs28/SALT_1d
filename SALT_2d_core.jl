@@ -36,8 +36,8 @@ mutable struct InputStruct
     r::Array{Int,2}
     r_ext::Array{Int,2}
     n₁_vals::Array{Float64,1}    # real part of index for each region
-    n₂_vals::Array{Float64,1}    # imag part of index for each region
     n₁_inds::Array{Int64,1}    # real part of index for each region
+    n₂_vals::Array{Float64,1}    # imag part of index for each region
     n₂_inds::Array{Int64,1}    # imag part of index for each region
     ɛ::Array{Complex128,1}  # dielectric in each region
     ɛ_ext::Array{Complex128,1}  # dielectric in extended regions
@@ -400,13 +400,13 @@ end # end of function whichRegion
 
 
 """
-ε_sm, F_sm = subPixelSmoothing_core(XY, XY_ext, ∂R, ε, F, subPixelNum, truncate,
+ε_sm, F_sm = subPixelSmoothing(XY, XY_ext, ∂R, ε, F, subPixelNum, truncate,
     r, geometry, geoParams)
 
     XY = (x,y)
     XY_ext = (x_ext, y_ext)
 """
-function subPixelSmoothing_core(XY::Tuple{Array{Float64,1}, Array{Float64,1}},
+function subPixelSmoothing(XY::Tuple{Array{Float64,1}, Array{Float64,1}},
     XY_ext::Tuple{Array{Float64,1}, Array{Float64,1}}, ∂R::Array{Float64,1},
     ɛ::Array{Complex{Float64},1}, F::Array{Float64,1}, subPixelNum::Int,
     truncate::Bool, r::Array{Int,2}, geometry::Function, geoParams::Array{Float64,1},
@@ -455,18 +455,13 @@ function subPixelSmoothing_core(XY::Tuple{Array{Float64,1}, Array{Float64,1}},
 
     return ɛ_smoothed, F_smoothed, r
 end # end of function subpixelSmoothing_core
-
-
-"""
-ε_sm, F_sm = subPixelSmoothing(inputs; truncate = false)
-"""
 function subPixelSmoothing(inputs::InputStruct; truncate::Bool = false)::
     Tuple{Array{Complex{Float64},2}, Array{Float64,2},Array{Int,2}}
 
     XY = (inputs.x₁, inputs.x₂)
     XY_ext = (inputs.x₁_ext, inputs.x₂_ext)
 
-    ɛ_smoothed, F_smoothed, r = subPixelSmoothing_core(XY, XY_ext, inputs.∂R_ext,
+    ɛ_smoothed, F_smoothed, r = subPixelSmoothing(XY, XY_ext, inputs.∂R_ext,
         inputs.ɛ_ext, inputs.F_ext, inputs.subPixelNum, truncate, inputs.r_ext,
         inputs.geometry, inputs.geoParams, inputs.wgd, inputs.wgp, inputs.wgt)
 
@@ -524,7 +519,7 @@ function processInputs(
     subPixelNum::Int
     )::InputStruct
 
-    if !(length(wgd)==length(wgp)==length(wgt)==length(wge))
+    if !(length(wgd)==length(wgp)==length(wgt)==length(wgn))
         error("Waveguide parameters have different lengths.")
     end
 
@@ -589,7 +584,7 @@ function processInputs(
 
     inputs = InputStruct(coord, N, N_ext, ℓ, ℓ_ext, x̄, x̄_ext, x̄_inds, dx̄, x₁,
     x₁_ext, x₁_inds, x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, ∂S, r, r_ext, n₁_vals,
-    n₂_vals, n₁_inds, n₂_inds, ɛ, ɛ_ext, ɛ_sm, F_vals, F_inds, F, F_ext, F_sm,
+    n₁_inds, n₂_vals, n₂_inds, ɛ, ɛ_ext, ɛ_sm, F_vals, F_inds, F, F_ext, F_sm,
     ω₀, k₀, γ⟂, D₀, a, bc, bc_sig, bk, input_modes, scatteringRegions, channels,
     geometry, geoParams, wgd, wgp, wgt, wgn, subPixelNum)
 
