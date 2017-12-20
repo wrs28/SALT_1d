@@ -21,6 +21,36 @@ function computeK_L_core(inputs::InputStruct, k::Complex128, fields::Array{Symbo
 
     return K,r
 end
+function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Array{Symbol,1},
+    field_inds::Array{Int,1}, params::Array{Array{Float64,1},1}, F::Array{Float64,1},
+    truncate::Bool, ψ_init::Array{Complex128,1})::Tuple{SharedArray,Channel}
+
+    nk = length(k)
+    dims = tuple(nk, length.(params)...)
+    K = SharedArray{Complex128}(dims)
+
+    inputs1 = deepcopy(inputs)
+    for i in 1:nk
+        for j in 1:length(params[1])
+            if !isempty(size(getfield(inputs1,fields[1])))
+                params_temp = getfield(inputs1,fields[1])
+                params_temp[field_inds[1]] = params[1][j]
+                updateInputs!(inputs1,fields[1],params_temp)
+            else
+                updateInputs!(inputs1,fields[1],params[1][j])
+            end
+            K[i,j,dims[3:end]...], ψ = computeK_L_core(inputs1, k; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
+        end
+    end
+
+    r = Channel(length(procs(K)))
+    # for p in procs(K)
+        # @async put!(r, remotecall_fetch(computeK_L_core!, p, K, inputs, k, fields, field_inds,
+                                # params, nk, F, truncate, ψ_init))
+    # end
+
+    return K,r
+end
 
 
 """
@@ -63,6 +93,15 @@ function computeZero_L(inputs1::InputStruct, k::Union{Complex128,Float64,Int},
     inputs = open_to_pml_in(inputs1)
 
     K,r = computeK_L_core(inputs, complex(1.0*k), fields, field_inds, params, nz, F, truncate, ψ_init)
+end # end of function computeZero_L
+function computeZero_L(inputs1::InputStruct, k::Union{Array{Complex128,1},Array{Float64,1},Array{Int,1}},
+    fields::Array{Symbol,1}, field_inds::Array{Int,1}, params::Array{Array{Float64,1},1};
+    F::Array{Float64,1}=[1.], truncate::Bool=false,
+    ψ_init::Array{Complex128,1}=Complex128[])::Tuple{SharedArray,Channel}
+
+    inputs = open_to_pml_in(inputs1)
+
+    K,r = computeK_L_core(inputs, complex(1.0.*k), fields, field_inds, params, F, truncate, ψ_init)
 end # end of function computeZero_L
 
 
