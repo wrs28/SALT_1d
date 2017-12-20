@@ -534,6 +534,7 @@ function processInputs(
     dx̄ = [dx₁, dx₂]
 
     fix_bc!(bc)
+    bc_sig = prod(bc)
 
     dN = Int[0, 0, 0, 0]
     for i in 1:4
