@@ -35,11 +35,15 @@ mutable struct InputStruct
     ∂S::Array{Float64,1}   # emitting equivalent source surface
     r::Array{Int,2}
     r_ext::Array{Int,2}
-    n₁::Array{Float64,1}    # real part of index for each region
-    n₂::Array{Float64,1}    # imag part of index for each region
+    n₁_vals::Array{Float64,1}    # real part of index for each region
+    n₂_vals::Array{Float64,1}    # imag part of index for each region
+    n₁_inds::Array{Int64,1}    # real part of index for each region
+    n₂_inds::Array{Int64,1}    # imag part of index for each region
     ɛ::Array{Complex128,1}  # dielectric in each region
     ɛ_ext::Array{Complex128,1}  # dielectric in extended regions
     ɛ_sm::Array{Complex128,2}   # smoothed dielectric in extended regions
+    F_vals::Array{Float64,1}
+    F_inds::Array{Int64,1}
     F::Array{Float64,1}     # pump profile in each region
     F_ext::Array{Float64,1} # pump profile in extended regions
     F_sm::Array{Float64,2}  # smoothed pump profile in extended regions
@@ -59,7 +63,7 @@ mutable struct InputStruct
     wgd::Array{String,1}
     wgp::Array{Float64,1}
     wgt::Array{Float64,1}
-    wge::Array{Float64,1}
+    wgn::Array{Float64,1}
     subPixelNum::Int
 end
 
@@ -490,15 +494,18 @@ processInputs(k₀, k, bc, F, n₁, n₂, a, scatteringRegions, incidentWaveRegi
 function processInputs(
     geometry::Function,
     geoParams::Array{Float64,1},
-    n₁::Array{Float64,1},
-    n₂::Array{Float64,1},
+    n₁_vals::Array{Float64,1},
+    n₁_inds::Array{Int64,1},
+    n₂_vals::Array{Float64,1},
+    n₂_inds::Array{Int64,1},
     scatteringRegions::Array{Int,1},
     wgd::Array{String,1},
     wgp::Array{Float64,1},
     wgt::Array{Float64,1},
-    wge::Array{Float64,1},
+    wgn::Array{Float64,1},
 
-    F::Array{Float64,1},
+    F_vals::Array{Float64,1},
+    F_inds::Array{Int64,1},
     D₀::Float64,
     k₀::Complex128,
     γ⟂::Float64,
@@ -568,10 +575,11 @@ function processInputs(
 
     ∂R_ext = vcat([x₁_ext[1]-dx₁/2], [x₁_ext[end]+dx₁/2], [x₂_ext[1]-dx₂/2], [x₂_ext[end]+dx₂/2], ∂R)
 
-    F[iszero.(F)] = F_min
+    F_vals[iszero.(F_vals)] = F_min
+    F = F_vals[F_inds]
     F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F_min*ones(size(wge)), F)
-    ε = (n₁ + 1.0im*n₂).^2
-    ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wge, ɛ)
+    ε = (n₁_vals[n₁_inds] + 1.0im*n₂_vals[n₂_inds]).^2
+    ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wgn.^2, ɛ)
 
     ɛ_sm, F_sm, r_ext = subPixelSmoothing_core( (x₁, x₂), (x₁_ext, x₂_ext),
         ∂R_ext, ɛ_ext, F_ext, subPixelNum, false, [Int[] Int[]], geometry, geoParams,
@@ -579,10 +587,11 @@ function processInputs(
 
     r = reshape(r_ext[x̄_inds],N[1],N[2])
 
-    inputs = InputStruct(coord, N, N_ext, ℓ, ℓ_ext, x̄, x̄_ext, x̄_inds, dx̄, x₁, x₁_ext, x₁_inds,
-        x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, ∂S, r, r_ext, n₁, n₂, ɛ, ɛ_ext, ɛ_sm, F, F_ext, F_sm,
-        ω₀, k₀, γ⟂, D₀, a, bc, prod(bc), bk, input_modes, scatteringRegions,
-        channels, geometry, geoParams, wgd, wgp, wgt, wge, subPixelNum)
+    inputs = InputStruct(coord, N, N_ext, ℓ, ℓ_ext, x̄, x̄_ext, x̄_inds, dx̄, x₁,
+    x₁_ext, x₁_inds, x₂, x₂_ext, x₂_inds, ∂R, ∂R_ext, ∂S, r, r_ext, n₁_vals,
+    n₂_vals, n₁_inds, n₂_inds, ɛ, ɛ_ext, ɛ_sm, F_vals, F_inds, F, F_ext, F_sm,
+    ω₀, k₀, γ⟂, D₀, a, bc, bc_sig, bk, input_modes, scatteringRegions, channels,
+    geometry, geoParams, wgd, wgp, wgt, wgn, subPixelNum)
 
     return inputs
 end # end of function processInputs
@@ -677,23 +686,22 @@ function updateInputs!(inputs::InputStruct, field::Symbol, value::Any)::InputStr
 
     end
 
-    if  field in [:∂R, :N, :bc, :F, :n₁, :n₂, :ε, :wge, :wgt, :wgp, :wgd, :subPixelNum, :geoParams]
+    if  field in [:∂R, :N, :bc, :F_inds, :F_vals, :n₁_vals, :n₂_vals, :n₁_inds,
+        :n₂_inds, :wgn, :wgt, :wgp, :wgd, :subPixelNum, :geoParams]
 
-        F = inputs.F
-        if field == :ε
-            n₁ = real(sqrt.(inputs.ε))
-            n₂ = imag(sqrt.(inputs.ε))
-        else
-            n₁ = inputs.n₁
-            n₂ = inputs.n₂
-        end
-        wge = inputs.wge
+        F_vals = inputs.F_vals
+        F_inds = inputs.F_inds
+        n₁_vals = inputs.n₁_vals
+        n₂_vals = inputs.n₂_vals
+        n₁_inds = inputs.n₁_inds
+        n₂_inds = inputs.n₂_inds
+        wgn = inputs.wgn
 
-        F[iszero.(F)] = F_min
-        F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F_min*ones(size(wge)), F)
+        F_vals[iszero.(F_vals)] = F_min
+        F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F_min*ones(size(wgn)), F_vals[F_inds])
 
-        ε = (n₁ + 1.0im*n₂).^2
-        ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wge, ɛ)
+        ε = (n₁_vals[n₁_inds] + 1.0im*n₂_vals[n₂_inds]).^2
+        ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wgn.^2, ɛ)
 
         ɛ_sm, F_sm, r_ext = subPixelSmoothing_core( (inputs.x₁, inputs.x₂),
             (inputs.x₁_ext, inputs.x₂_ext), inputs.∂R_ext, ɛ_ext, F_ext,
@@ -797,23 +805,22 @@ function updateInputs!(inputs::InputStruct, fields::Array{Symbol,1}, value::Arra
 
     end
 
-    if  !isempty(fields ∩ [:∂R, :N, :bc, :F, :n₁, :n₂, :ε, :wge, :wgt, :wgp, :wgd, :subPixelNum, :geoParams])
+    if  !isempty(fields ∩ [:∂R, :N, :bc, :F, :n₁_vals, :n₁_inds, :n₂_vals,
+        :n₂_inds, :wgn, :wgt, :wgp, :wgd, :subPixelNum, :geoParams])
 
-        F = inputs.F
-        if any(fields .== :ε)
-            n₁ = real(sqrt.(inputs.ε))
-            n₂ = imag(sqrt.(inputs.ε))
-        else
-            n₁ = inputs.n₁
-            n₂ = inputs.n₂
-        end
-        wge = inputs.wge
+        F_vals = inputs.F_vals
+        F_inds = inputs.F_inds
+        n₁_vals = inputs.n₁_vals
+        n₂_vals = inputs.n₂_vals
+        n₁_inds = inputs.n₁_inds
+        n₂_inds = inputs.n₂_inds
+        wgn = inputs.wgn
 
-        F[iszero.(F)] = F_min
-        F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F_min*ones(size(wge)), F)
+        F_vals[iszero.(F_vals)] = F_min
+        F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F_min*ones(size(wgn)), F_vals[F_inds])
 
-        ε = (n₁ + 1.0im*n₂).^2
-        ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wge, ɛ)
+        ε = (n₁_vals[n₁_inds] + 1.0im*n₂_vals[n₂_inds]).^2
+        ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wgn.^2, ɛ)
 
         ɛ_sm, F_sm, r_ext = subPixelSmoothing_core( (inputs.x₁, inputs.x₂),
             (inputs.x₁_ext, inputs.x₂_ext), inputs.∂R_ext, ɛ_ext, F_ext,
