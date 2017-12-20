@@ -576,7 +576,7 @@ function processInputs(
     ε = (n₁_vals[n₁_inds] + 1.0im*n₂_vals[n₂_inds]).^2
     ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wgn.^2, ɛ)
 
-    ɛ_sm, F_sm, r_ext = subPixelSmoothing_core( (x₁, x₂), (x₁_ext, x₂_ext),
+    ɛ_sm, F_sm, r_ext = subPixelSmoothing( (x₁, x₂), (x₁_ext, x₂_ext),
         ∂R_ext, ɛ_ext, F_ext, subPixelNum, false, [Int[] Int[]], geometry, geoParams,
         wgd, wgp, wgt)
 
@@ -698,7 +698,7 @@ function updateInputs!(inputs::InputStruct, field::Symbol, value::Any)::InputStr
         ε = (n₁_vals[n₁_inds] + 1.0im*n₂_vals[n₂_inds]).^2
         ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wgn.^2, ɛ)
 
-        ɛ_sm, F_sm, r_ext = subPixelSmoothing_core( (inputs.x₁, inputs.x₂),
+        ɛ_sm, F_sm, r_ext = subPixelSmoothing( (inputs.x₁, inputs.x₂),
             (inputs.x₁_ext, inputs.x₂_ext), inputs.∂R_ext, ɛ_ext, F_ext,
             inputs.subPixelNum, false, [Int[] Int[]], inputs.geometry,
             inputs.geoParams, inputs.wgd, inputs.wgp, inputs.wgt)
