@@ -572,7 +572,7 @@ function processInputs(
 
     F_vals[iszero.(F_vals)] = F_min
     F = F_vals[F_inds]
-    F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F_min*ones(size(wge)), F)
+    F_ext = vcat([F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], [F_min], F_min*ones(size(wgn)), F)
     ε = (n₁_vals[n₁_inds] + 1.0im*n₂_vals[n₂_inds]).^2
     ɛ_ext = vcat([1], [1], [1], [1], [1], [1], [1], [1], wgn.^2, ɛ)
 
