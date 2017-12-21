@@ -94,7 +94,8 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
 
     inds = p_range(K,dim)
     subs = ind2sub(size(K)[1:dim-1],inds)
-return subs
+    println(subs)
+
     for i in 1:length(inds)
         for f in 1:length(fields)
             if !isempty(size(getfield(inputs,fields[f])))
