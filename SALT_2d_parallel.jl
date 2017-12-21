@@ -7,16 +7,16 @@
 computeK_L_core(inputs, k, fields, field_inds, params, nk, F, truncate, ψ_init)
 """
 function computeK_L_core(inputs::InputStruct, k::Complex128, fields::Array{Symbol,1},
-    field_inds::Array{Int,1}, params::Array{Array{Float64,1},1}, nk::Int, F::Array{Float64,1},
+    field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, nk::Int, F::Array{Float64,1},
     truncate::Bool, ψ_init::Array{Complex128,1})::Tuple{SharedArray,Channel}
 
-    dims = tuple(nk, length.(params)...)
+    dims = tuple(nk, length.(field_vals)...)
     K = SharedArray{Complex128}(dims)
 
     r = Channel(length(procs(K)))
     for p in procs(K)
         @async put!(r, remotecall_fetch(computeK_L_core!, p, K, inputs, k, fields, field_inds,
-                                params, nk, F, truncate, ψ_init))
+                                field_vals, nk, F, truncate, ψ_init))
     end
 
     return K,r
@@ -51,10 +51,12 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
     end
 
     r = Channel(length(procs(K)))
-    # for p in procs(K)
-        # @async put!(r, remotecall_fetch(computeK_L_core!, p, K, inputs, k, fields, field_inds,
-                                # params, nk, F, truncate, ψ_init))
-    # end
+    for d in 3:ndims(K)
+        for p in procs(K)
+            @async put!(r, remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
+                                    field_vals, d, F, truncate, ψ_init))
+        end
+    end
 
     return K,r
 end
@@ -64,7 +66,7 @@ end
 computeK_L_core!(K, inputs, k, fields, field_inds, params, nk, F, truncate, ψ_init)
 """
 function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
-    fields::Array{Symbol,1}, field_inds::Array{Int,1}, params::Array{Array{Float64,1},1},
+    fields::Array{Symbol,1}, field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1},
     nk::Int, F::Array{Float64,1}, truncate::Bool, ψ_init::Array{Complex128,1})::SharedArray
 
     inds = p_range(K)
@@ -73,11 +75,11 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
     for i in 1:length(inds)
         for f in 1:length(fields)
             if !isempty(size(getfield(inputs,fields[f])))
-                params_temp = getfield(inputs,fields[f])
-                params_temp[field_inds[f]] = params[f][subs[f][i]]
-                updateInputs!(inputs,fields[f],params_temp)
+                vals_temp = getfield(inputs,fields[f])
+                vals_temp[field_inds[f]] = field_vals[f][subs[f][i]]
+                updateInputs!(inputs,fields[f],vals_temp)
             else
-                updateInputs!(inputs,fields[f],params[f][subs[f][i]])
+                updateInputs!(inputs,fields[f],field_vals[f][subs[f][i]])
             end
         end
 
@@ -86,7 +88,29 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
 
     return K
 end
+function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Symbol,1},
+    field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, dim::Int64
+    F::Array{Float64,1}, truncate::Bool, ψ_init::Array{Complex128,1})::SharedArray
 
+    inds = p_range(K,dim)
+    subs = ind2sub(size(K)[1:dim-1],inds)
+return subs
+    for i in 1:length(inds)
+        for f in 1:length(fields)
+            if !isempty(size(getfield(inputs,fields[f])))
+                vals_temp = getfield(inputs,fields[f])
+                vals_temp[field_inds[f]] = field_vals[f][subs[f][i]]
+                updateInputs!(inputs,fields[f],vals_temp)
+            else
+                updateInputs!(inputs,fields[f],field_vals[f][subs[f][i]])
+            end
+        end
+
+        K[1,[subs[j][i] for j in 1:length(subs)]...], ψ = computeK_L_core(inputs, k; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
+    end
+
+    return K
+end
 
 """
 computeZero_L(inputs, k, fields, field_inds, params; nz=1, F=[1.], truncate=false, ψ_init=[])
@@ -124,6 +148,15 @@ function p_range(q::SharedArray)::Array{Int,1}
     end
     nchunks = length(procs(q))
     splits = [round(Int, s) for s in linspace(0, prod(size(q)[2:end]) , nchunks+1)]
+    splits[idx]+1:splits[idx+1]
+end
+function p_range(q::SharedArray, dim::Int64)::Array{Int,1}
+    idx = indexpids(q)
+    if idx == 0 # This worker is not assigned a piece
+        return 1:0
+    end
+    nchunks = length(procs(q))
+    splits = [round(Int, s) for s in linspace(0, prod(size(q)[1:dim-1]) , nchunks+1)]
     splits[idx]+1:splits[idx+1]
 end
 
