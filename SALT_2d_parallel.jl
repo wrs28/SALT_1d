@@ -89,7 +89,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
     return K
 end
 function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Symbol,1},
-    field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, dim::Int64
+    field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, dim::Int64,
     F::Array{Float64,1}, truncate::Bool, ψ_init::Array{Complex128,1})::SharedArray
 
     inds = p_range(K,dim)
