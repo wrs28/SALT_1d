@@ -96,18 +96,25 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
     subs = ind2sub(size(K)[1:dim-1],inds)
     println(subs)
 
-    for i in 1:length(inds)
-        for f in 1:length(fields)
-            if !isempty(size(getfield(inputs,fields[f])))
-                vals_temp = getfield(inputs,fields[f])
-                vals_temp[field_inds[f]] = field_vals[f][subs[f][i]]
-                updateInputs!(inputs,fields[f],vals_temp)
-            else
-                updateInputs!(inputs,fields[f],field_vals[f][subs[f][i]])
+    for d in 2:size(K,dim)
+        for i in 1:length(inds)
+            for f in 1:length(fields)
+                if f < dim
+                    val_ind = subs[f+1][i]
+                else
+                    val_ind = 1
+                end
+                if !isempty(size(getfield(inputs,fields[f])))
+                    vals_temp = getfield(inputs,fields[f])
+                    vals_temp[field_inds[f]] = field_vals[f][val_ind]
+                    updateInputs!(inputs,fields[f],vals_temp)
+                else
+                    updateInputs!(inputs,fields[f],field_vals[f][val_ind])
+                end
             end
+            k_temp, ψ = computeK_L_core(inputs, K[[subs[j][i] for j in 1:length(subs)]..., d-1, ones(Int64,ndims(K)-dim)...]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
+            K[[subs[j][i] for j in 1:length(subs)]..., d, ones(Int64,ndims(K)-dim)...] = k_temp[1]
         end
-
-        K[1,[subs[j][i] for j in 1:length(subs)]...], ψ = computeK_L_core(inputs, k; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
     end
 
     return K
