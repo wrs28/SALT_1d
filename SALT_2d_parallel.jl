@@ -22,27 +22,28 @@ function computeK_L_core(inputs::InputStruct, k::Complex128, fields::Array{Symbo
     return K,r
 end
 function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Array{Symbol,1},
-    field_inds::Array{Int,1}, params::Array{Array{Float64,1},1}, F::Array{Float64,1},
+    field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, F::Array{Float64,1},
     truncate::Bool, ψ_init::Array{Complex128,1})::Tuple{SharedArray,Channel}
 
     nk = length(k)
-    dims = tuple(nk, length.(params)...)
+    dims = tuple(nk, length.(field_vals)...)
     K = SharedArray{Complex128}(dims)
+    ψ = Complex128[]
 
     inputs1 = deepcopy(inputs)
     for i in 1:nk
-        for j in 1:length(params[1])
+        for j in 1:length(field_vals[1])
             if !isempty(size(getfield(inputs1,fields[1])))
-                params_temp = getfield(inputs1,fields[1])
-                params_temp[field_inds[1]] = params[1][j]
-                updateInputs!(inputs1,fields[1],params_temp)
+                vals_temp = getfield(inputs1,fields[1])
+                vals_temp[field_inds[1]] = field_vals[1][j]
+                updateInputs!(inputs1,fields[1],vals_temp)
             else
-                updateInputs!(inputs1,fields[1],params[1][j])
+                updateInputs!(inputs1,fields[1],field_vals[1][j])
             end
             if j == 1
-                K[i,1,ones(size(K)[3:end])...], ψ = computeK_L_core(inputs1, k[i]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
+                K[i,1,ones(Int64,ndims(K)-2)...], ψ = computeK_L_core(inputs1, k[i]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
             else
-                K[i,j,ones(size(K)[3:end])...], ψ = computeK_L_core(inputs1, K[i,j-1,ones(size(K)[3:end])...]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
+                K[i,j,ones(Int64,ndims(K)-2)...], ψ = computeK_L_core(inputs1, K[i,j-1,ones(Int64,ndims(K)-2)...]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
             end
         end
     end
