@@ -94,9 +94,6 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
 
     inds = p_range(K,dim)
     subs = ind2sub(size(K)[1:dim-1],inds)
-    println("dim $(dim)")
-    println("inds $(inds)")
-    println("subs $(subs)")
     for d in 2:size(K,dim)
         for i in 1:length(inds)
             for f in 1:length(fields)
@@ -113,6 +110,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
                     updateInputs!(inputs,fields[f],field_vals[f][val_ind])
                 end
             end
+            println(d)
             println([[subs[j][i] for j in 1:length(subs)]..., d, ones(Int64,ndims(K)-dim)...])
             k_temp, ψ = computeK_L_core(inputs, K[[subs[j][i] for j in 1:length(subs)]..., d-1, ones(Int64,ndims(K)-dim)...]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
             K[[subs[j][i] for j in 1:length(subs)]..., d, ones(Int64,ndims(K)-dim)...] = k_temp[1]
@@ -136,13 +134,13 @@ function computeZero_L(inputs1::InputStruct, k::Union{Complex128,Float64,Int},
     K,r = computeK_L_core(inputs, complex(1.0*k), fields, field_inds, params, nz, F, truncate, ψ_init)
 end # end of function computeZero_L
 function computeZero_L(inputs1::InputStruct, k::Union{Array{Complex128,1},Array{Float64,1},Array{Int,1}},
-    fields::Array{Symbol,1}, field_inds::Array{Int,1}, params::Array{Array{Float64,1},1};
+    fields::Array{Symbol,1}, field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1};
     F::Array{Float64,1}=[1.], truncate::Bool=false,
     ψ_init::Array{Complex128,1}=Complex128[])::Tuple{SharedArray,Channel}
 
     inputs = open_to_pml_in(inputs1)
 
-    K,r = computeK_L_core(inputs, complex(1.0.*k), fields, field_inds, params, F, truncate, ψ_init)
+    K,r = computeK_L_core(inputs, complex(1.0.*k), fields, field_inds, field_vals, F, truncate, ψ_init)
 end # end of function computeZero_L
 
 
