@@ -53,8 +53,10 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
     r = Channel(length(procs(K)))
     for d in 3:ndims(K)
         @sync for p in procs(K)
-            @async put!(r, remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
-                                    field_vals, d, F, truncate, ψ_init))
+            # @async put!(r, remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
+            #                         field_vals, d, F, truncate, ψ_init))
+            @async remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
+                                    field_vals, d, F, truncate, ψ_init)
         end
     end
 
