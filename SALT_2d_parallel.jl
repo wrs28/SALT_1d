@@ -73,6 +73,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
     subs = ind2sub(size(K)[2:end],inds)
 
     for i in 1:length(inds)
+        println(1:length(inds))
         for f in 1:length(fields)
             if !isempty(size(getfield(inputs,fields[f])))
                 vals_temp = getfield(inputs,fields[f])
@@ -110,7 +111,6 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
                     updateInputs!(inputs,fields[f],field_vals[f][val_ind])
                 end
             end
-            println(d)
             println([[subs[j][i] for j in 1:length(subs)]..., d, ones(Int64,ndims(K)-dim)...])
             k_temp, ψ = computeK_L_core(inputs, K[[subs[j][i] for j in 1:length(subs)]..., d-1, ones(Int64,ndims(K)-dim)...]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
             K[[subs[j][i] for j in 1:length(subs)]..., d, ones(Int64,ndims(K)-dim)...] = k_temp[1]
