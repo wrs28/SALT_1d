@@ -69,7 +69,7 @@ computeK_L_core!(K, inputs, k, fields, field_inds, params, nk, F, truncate, ψ_i
 """
 function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
     fields::Array{Symbol,1}, field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1},
-    nk::Int, F::Array{Float64,1}, truncate::Bool, ψ_init::Array{Complex128,1})::SharedArray
+    nk::Int, F::Array{Float64,1}, truncate::Bool, ψ_init::Array{Complex128,1})
 
     inds = p_range(K)
     subs = ind2sub(size(K)[2:end],inds)
@@ -89,7 +89,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
         K[:,[subs[j][i] for j in 1:length(subs)]...], ψ = computeK_L_core(inputs, k; nk=nk, F=F, truncate=truncate, ψ_init=ψ_init)
     end
 
-    return K
+    return
 end
 function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Symbol,1},
     field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, dim::Int64,
@@ -98,7 +98,9 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
     inds = p_range(K,dim)
     subs = ind2sub(size(K)[1:dim-1],inds)
     for d in 2:size(K,dim)
+        println(2:size(K,dim))
         for i in 1:length(inds)
+            println(1:length(inds))
             for f in 1:length(fields)
                 if f < dim-1
                     val_ind = subs[f+1][i]
