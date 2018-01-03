@@ -98,10 +98,10 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
     for d in 2:size(K,dim)
         for i in 1:length(inds)
             for f in 1:length(fields)
-                if f ≤ dim-1
+                if f < dim-1
                     val_ind = subs[f+1][i]
                 else
-                    val_ind = 1
+                    val_ind = d
                 end
                 if !isempty(size(getfield(inputs,fields[f])))
                     vals_temp = getfield(inputs,fields[f])
