@@ -23,7 +23,7 @@ function computeK_L_core(inputs::InputStruct, k::Complex128, fields::Array{Symbo
 end
 function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Array{Symbol,1},
     field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, F::Array{Float64,1},
-    truncate::Bool, ψ_init::Array{Complex128,1})::Tuple{SharedArray,Channel}
+    truncate::Bool, ψ_init::Array{Complex128,1})::SharedArray
 
     nk = length(k)
     dims = tuple(nk, length.(field_vals)...)
@@ -50,7 +50,6 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
         end
     end
 
-    r = Channel(length(procs(K)))
     for d in 3:ndims(K)
         @sync for p in procs(K)
             #@async put!(r, remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
@@ -60,7 +59,7 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
         end
     end
 
-    return K,r
+    return K
 end
 
 
@@ -99,9 +98,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
     for d in 2:size(K,dim)
         for i in 1:length(inds)
             for f in 1:length(fields)
-                println(f)
-                println(dim-1)
-                if f < dim-1
+                if f ≤ dim-1
                     val_ind = subs[f+1][i]
                 else
                     val_ind = 1
