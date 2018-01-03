@@ -53,10 +53,10 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
     r = Channel(length(procs(K)))
     for d in 3:ndims(K)
         @sync for p in procs(K)
-            # @async put!(r, remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
-            #                         field_vals, d, F, truncate, ψ_init))
-            @async remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
-                                    field_vals, d, F, truncate, ψ_init)
+            @async put!(r, remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
+                                 field_vals, d, F, truncate, ψ_init))
+            #@async remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
+        #                            field_vals, d, F, truncate, ψ_init)
         end
     end
 
@@ -88,7 +88,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
         K[:,[subs[j][i] for j in 1:length(subs)]...], ψ = computeK_L_core(inputs, k; nk=nk, F=F, truncate=truncate, ψ_init=ψ_init)
     end
 
-    return
+    return K
 end
 function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Symbol,1},
     field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, dim::Int64,
@@ -112,6 +112,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
                     updateInputs!(inputs,fields[f],field_vals[f][val_ind])
                 end
             end
+            println(inputs.n₂_vals[2])
             k_temp, ψ = computeK_L_core(inputs, K[[subs[j][i] for j in 1:length(subs)]..., d-1, ones(Int64,ndims(K)-dim)...]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
             K[[subs[j][i] for j in 1:length(subs)]..., d, ones(Int64,ndims(K)-dim)...] = k_temp[1]
         end
