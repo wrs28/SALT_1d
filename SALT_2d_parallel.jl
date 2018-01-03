@@ -112,7 +112,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
                     updateInputs!(inputs,fields[f],field_vals[f][val_ind])
                 end
             end
-            println(inputs.n₂_vals[2])
+            println(inputs.geoParams[5])
             k_temp, ψ = computeK_L_core(inputs, K[[subs[j][i] for j in 1:length(subs)]..., d-1, ones(Int64,ndims(K)-dim)...]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
             K[[subs[j][i] for j in 1:length(subs)]..., d, ones(Int64,ndims(K)-dim)...] = k_temp[1]
         end
