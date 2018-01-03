@@ -99,6 +99,8 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
     for d in 2:size(K,dim)
         for i in 1:length(inds)
             for f in 1:length(fields)
+                println(f)
+                println(dim-1)
                 if f < dim-1
                     val_ind = subs[f+1][i]
                 else
