@@ -4,7 +4,9 @@
 
 
 """
-computeK_L_core(inputs, k, fields, field_inds, params, nk, F, truncate, ψ_init)
+K,r = computeK_L_core(inputs, k, fields, field_inds, field_vals, nk, F, truncate, ψ_init)
+
+K = computeK_L_core(inputs, k, fields, field_inds, field_vals, F, truncate, ψ_init)
 """
 function computeK_L_core(inputs::InputStruct, k::Complex128, fields::Array{Symbol,1},
     field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, nk::Int, F::Array{Float64,1},
@@ -52,8 +54,6 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
 
     for d in 3:ndims(K)
         @sync for p in procs(K)
-            #@async put!(r, remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
-        #                         field_vals, d, F, truncate, ψ_init))
             @async remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
                                     field_vals, d, F, truncate, ψ_init)
         end
@@ -64,7 +64,9 @@ end
 
 
 """
-computeK_L_core!(K, inputs, k, fields, field_inds, params, nk, F, truncate, ψ_init)
+computeK_L_core!(K, inputs, k, fields, field_inds, field_vals, nk, F, truncate, ψ_init)
+
+computeK_L_core!(K, inputs, fields, field_inds, field_vals, dim, F, truncate, ψ_init)
 """
 function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
     fields::Array{Symbol,1}, field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1},
@@ -87,11 +89,11 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, k::Complex128,
         K[:,[subs[j][i] for j in 1:length(subs)]...], ψ = computeK_L_core(inputs, k; nk=nk, F=F, truncate=truncate, ψ_init=ψ_init)
     end
 
-    return K
+    return
 end
 function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Symbol,1},
     field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, dim::Int64,
-    F::Array{Float64,1}, truncate::Bool, ψ_init::Array{Complex128,1})::SharedArray
+    F::Array{Float64,1}, truncate::Bool, ψ_init::Array{Complex128,1})
 
     inds = p_range(K,dim)
     subs = ind2sub(size(K)[1:dim-1],inds)
@@ -117,12 +119,15 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
         end
     end
 
-    return K
+    return
 end
 
+
 """
-computeZero_L(inputs, k, fields, field_inds, params; nz=1, F=[1.], truncate=false, ψ_init=[])
+K = computeZero_L(inputs, k, fields, field_inds, params; nz=1, F=[1.], truncate=false, ψ_init=[])
     does parallel computation of computeZero_L over fields[field_inds]=params
+
+K = computeZero_L(inputs, k, fields, field_inds, field_vals; F=[1.], truncate=false, ψ_init=[])
 """
 function computeZero_L(inputs1::InputStruct, k::Union{Complex128,Float64,Int},
     fields::Array{Symbol,1}, field_inds::Array{Int,1}, params::Array{Array{Float64,1},1};
@@ -145,7 +150,9 @@ end # end of function computeZero_L
 
 
 """
-p_range(q)
+inds = p_range(q)
+inds = p_range(q, dim)
+
     q is a shared array.
     returns the indices to be computed on this process.
 """
