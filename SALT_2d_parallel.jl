@@ -6,7 +6,7 @@
 """
 K,r = computeK_L_core(inputs, k, fields, field_inds, field_vals, nk, F, truncate, ψ_init)
 
-K = computeK_L_core(inputs, k, fields, field_inds, field_vals, F, truncate, ψ_init)
+K   = computeK_L_core(inputs, k, fields, field_inds, field_vals, F, truncate, ψ_init)
 """
 function computeK_L_core(inputs::InputStruct, k::Complex128, fields::Array{Symbol,1},
     field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, nk::Int, F::Array{Float64,1},
@@ -43,11 +43,13 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
                 updateInputs!(inputs1,fields[1],field_vals[1][j])
             end
             if j == 1
-                k_temp, ψ = computeK_L_core(inputs1, k[i]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
+                k_temp, ψ_temp = computeK_L_core(inputs1, k[i]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
                 K[i,1,ones(Int64,ndims(K)-2)...] = k_temp[1]
+                ψ = ψ_temp[:,1]
             else
-                k_temp, ψ = computeK_L_core(inputs1, K[i,j-1,ones(Int64,ndims(K)-2)...]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
+                k_temp, ψ_temp = computeK_L_core(inputs1, K[i,j-1,ones(Int64,ndims(K)-2)...]; nk=1, F=F, truncate=truncate, ψ_init=ψ)
                 K[i,j,ones(Int64,ndims(K)-2)...] = k_temp[1]
+                ψ = ψ_temp[:,1]
             end
         end
     end
