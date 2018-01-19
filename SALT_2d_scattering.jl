@@ -415,7 +415,8 @@ function synthesize_source(inputs::InputStruct, k::Complex128)::
     ∇² = laplacian(k,inputs)
 
     inputs1 = deepcopy(inputs)
-    inputs1.ε[inputs1.scatteringRegions] = 1
+    inputs1.n₁_vals[inputs1.n₁_inds[inputs1.scatteringRegions]] = 1
+    inputs1.n₂_vals[inputs1.n₂_inds[inputs1.scatteringRegions]] = 1
     updateInputs!(inputs1, :ε, inputs1.ε);
 
     k² = k^2

@@ -6,13 +6,12 @@ using SALT_1d
 using SALT_1d.Core
 
 
-
 """
 k = computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nks=3, F=[1.], R_min = .01, rank_tol = 1e-8)
 """
 function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nks=3, F=[1.], R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
-       
+
     ## definitions block
     nevals = nks
     D₀ = inputs["D₀"]
@@ -34,7 +33,7 @@ function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real};
     if isempty(size(F))
         F = [F]
     end
-    
+
     ɛ = sparse(1:N_ext, 1:N_ext, ɛ_ext[:], N_ext, N_ext, +)
     Γ = sparse(1:N_ext, 1:N_ext, Γ[:]    , N_ext, N_ext, +)
 
@@ -45,7 +44,7 @@ function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real};
     rad(a,b,θ) = b./sqrt.(sin(θ).^2+(b/a)^2.*cos(θ).^2)
     θ = angle(inputs["k₀"]-1im*inputs["γ⟂"]-k)
     flag = abs(inputs["k₀"]-1im*inputs["γ⟂"]-k) < rad(Radii[1],Radii[2],θ)
-    
+
     M = rand(N_ext,nevals)
     ϕ = 2π*(0:1/Nq:(1-1/Nq))
     Ω = k + Radii[1]*cos(ϕ) + 1im*Radii[2]*sin(ϕ)
@@ -54,9 +53,9 @@ function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real};
         RR = 2*R_min
         ΩΩ = inputs["k₀"]-1im*inputs["γ⟂"] + (RR/2)*cos(ϕ) + 1im*(RR/2)*sin(ϕ)
     end
-    
+
     AA = @parallel (+) for i in 1:Nq
-        
+
         k′ = Ω[i]
         k′² = k′^2
 
@@ -86,7 +85,7 @@ function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real};
                 dkk′ = (ΩΩ[2]  -ΩΩ[end]  )/2
             end
             χkk′² = sparse(1:N_ext, 1:N_ext, D₀*γ(kk′)*F[:].*F_ext[:]*kk′², N_ext, N_ext, +)
-            
+
             AA  = (∇²+(ɛ+Γ)*kk′²+χkk′²)\M
             AA₀ = AA*dkk′/(2π*1im)
             AA₁ = AA*kk′*dkk′/(2π*1im)
@@ -94,14 +93,14 @@ function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real};
             A₀ = A₀-AA₀
             A₁ = A₁-AA₁
         end
-        
+
         [A₀ A₁]
-        
+
     end
 
     A₀ = AA[:,1:nevals]
     A₁ = AA[:,nevals + (1:nevals)]
-    
+
     P = svdfact(A₀,thin = true)
     temp = find(P[:S] .< rank_tol)
     if isempty(temp)
@@ -117,48 +116,42 @@ function computeK_NL2_parallel(inputs::Dict, k::Number, Radii::Tuple{Real,Real};
 
     return D
 
-end 
+end
 # end of function computeK_NL2_parallel
-
-
 
 
 """
 k = computePole_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nps=3, F=[1.], R_min = .01, rank_tol = 1e-8)
 """
 function computePole_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nps=3, F=[1.], R_min = .01, rank_tol = 1e-8)
-    
+
     inputs = deepcopy(inputs1)
     inputs["bc"] = ["out" "out"]
     inputs = updateInputs(inputs)
-        
+
     k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nks=nps, F=F, R_min=R_min, rank_tol = rank_tol)
-    
+
     return k
-    
+
 end
 # end of function computeZerosNL2_parallel
-
-
 
 
 """
 k = computeZero_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nzs=3, F=[1.], R_min = .01,
 """
 function computeZero_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; Nq=100, nzs=3, F=[1.], R_min = .01, rank_tol = 1e-8)
-    
+
     inputs = deepcopy(inputs1)
     inputs["bc"] = ["in" "in"]
     inputs = updateInputs(inputs)
-    
+
     k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nks=nzs, F=F, R_min=R_min, rank_tol = rank_tol)
-    
+
     return k
-    
+
 end
 # end of function computeZero_NL2_parallel
-
-
 
 
 """
@@ -166,27 +159,25 @@ k = computeUZR_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; d
 """
 function computeUZR_NL2_parallel(inputs1::Dict, k::Number, Radii::Tuple{Real,Real}; direction = "R", Nq=100, nus=3, F=1., R_min = .01, rank_tol = 1e-8)
     # With Line Pulling, using contour integration
-    
+
     # set outgoing boundary conditions, using PML implementation
     inputs = deepcopy(inputs1)
-    if direction in ["R" "r" "right" "Right" "->" ">" "=>"] 
+    if direction in ["R" "r" "right" "Right" "->" ">" "=>"]
         inputs["bc"] = ["in" "out"]
-    elseif direction in ["L" "l" "left" "Left" "<-" "<" "<="] 
+    elseif direction in ["L" "l" "left" "Left" "<-" "<" "<="]
         inputs["bc"] = ["out" "in"]
     else
         println("error. invalid direction")
         return
     end
     inputs = updateInputs(inputs)
-    
+
     k = computeK_NL2_parallel(inputs, k, Radii; Nq=Nq, nks=nus, F=F, R_min = R_min, rank_tol = rank_tol)
 
     return k
 
-end 
+end
 # end of function computeUZR_NL2_parallel
-
-
 
 
 """
@@ -203,7 +194,7 @@ function computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=
     else
         S = SharedArray(abspath(fileName),Complex128,(2,2,length(inputs["k"]),N), pids=workers(), mode="w+")
     end
-    
+
     for i in 1:length(S)
         S[i]=1im*NaN
     end
@@ -216,15 +207,14 @@ function computeS_parallel(inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=
     end
 
     return S,r
-
-end 
+end
 # end of function computeS_parallel
 
 
 """
 computeS_parallel!(S::SharedArray,inputs::Dict; N=10, N_Type="D", isNonLinear=false, F=1., dispOpt = true)
 
-Computes S in-place, where S is created by 
+Computes S in-place, where S is created by
 
 S = SharedArray(Complex128,(2,2,length(inputs["k"]),N), pids=workers())
 
@@ -243,7 +233,7 @@ function computeS_parallel!(S::SharedArray,inputs::Dict; N=10, N_Type="D", isNon
         @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs); N=N, N_Type=N_Type, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt))
     end
 
-end 
+end
 # end of function computeS_parallel!
 
 
@@ -260,10 +250,10 @@ function computeS_parallel_core!(S::SharedArray, inputs::Dict; N=10, N_Type="D",
 
     inputs1 = deepcopy(inputs)
     inputs1["k"] = inputs["k"][k_inds]
-    
+
     S[:,:,k_inds,:] = computeS(inputs1; N=N, N_Type=N_Type, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt)
-    
-end 
+
+end
 # end of function computeS_parallel_core
 
 
@@ -278,13 +268,13 @@ function S_wait(r::Channel)
         take!(r)
         c += 1
     end
-    
+
     return
-    
+
 end
 
 
-#function computePolesL!(inputs::Dict, k::Number, nPoles::Int; F=1., eval::SharedArray) 
+#function computePolesL!(inputs::Dict, k::Number, nPoles::Int; F=1., eval::SharedArray)
 #     #No Line Pulling
 #
 #    ## DEFINITIONS BLOCK ##
@@ -300,8 +290,8 @@ end
 #    D₀ = inputs["D₀"]
 #    F_ext = inputs["F_ext"]
 #    ## END OF DEFINITIONS BLOCK ##
-#    
-#    
+#
+#
 #    r = whichRegion(x_ext, ∂_ext)
 #
 #    ∇² = laplacian(ℓ_ext, N_ext, 1+1im*σ(x_ext,∂_ext)/real(k))
@@ -373,7 +363,7 @@ end
 #
 #                if i == 1
 #                    ψ₊ = solve_scattered(inputs,inputs["ω₀"],inputs["xᵨ₊"],+; isNonLinear = false, F = 0.)
-#                    ψ₋ = solve_scattered(inputs,inputs["ω₀"],inputs["xᵨ₋"],-; isNonLinear = false, F = 0.) 
+#                    ψ₋ = solve_scattered(inputs,inputs["ω₀"],inputs["xᵨ₋"],-; isNonLinear = false, F = 0.)
 #
 #                    Ω[ω_inds[k],i,a_inds[k]],dummy1,dummy2,conv = computeZerosL(inputs,conj(ω[ω_inds[k]]),F=0.)
 #                    Ω₊[ω_inds[k],i,a_inds[k]] = Ω[ω_inds[k],1,a_inds[k]]
@@ -382,7 +372,7 @@ end
 #                    ψ₊ = solve_scattered(inputs,inputs["ω₀"],inputs["xᵨ₊"],+; isNonLinear = true, ψ_init = ψ₊)
 #                    ψ₋ = solve_scattered(inputs,inputs["ω₀"],inputs["xᵨ₋"],-; isNonLinear = true, ψ_init = ψ₋)
 #
-#                    Ω[ω_inds[k],i,a_inds[k]] ,dummy1,dummy2,conv = computeZerosL(inputs,Ω[ω_inds[k],i-1,a_inds[k]] ,F=1.)  
+#                    Ω[ω_inds[k],i,a_inds[k]] ,dummy1,dummy2,conv = computeZerosL(inputs,Ω[ω_inds[k],i-1,a_inds[k]] ,F=1.)
 #                    Ω₊[ω_inds[k],i,a_inds[k]],dummy1,dummy2,conv = computeZerosL(inputs,Ω₊[ω_inds[k],i-1,a_inds[k]],F=1./(1+abs2(ψ₊[:])))
 #                    Ω₋[ω_inds[k],i,a_inds[k]],dummy1,dummy2,conv = computeZerosL(inputs,Ω₋[ω_inds[k],i-1,a_inds[k]],F=1./(1+abs2(ψ₋[:])))
 #                end
@@ -427,7 +417,7 @@ end
 #
 #                if i == 1
 #                    ψ₊ = solve_scattered(inputs,inputs["ω₀"],inputs["xᵨ₊"],+; isNonLinear = false, F = 0.)
-#                    ψ₋ = solve_scattered(inputs,inputs["ω₀"],inputs["xᵨ₋"],-; isNonLinear = false, F = 0.) 
+#                    ψ₋ = solve_scattered(inputs,inputs["ω₀"],inputs["xᵨ₋"],-; isNonLinear = false, F = 0.)
 #
 #                    Ω[ω_inds[k],i,a_inds[k]] = ω[ω_inds[k]]
 #                    Ω₊[ω_inds[k],i,a_inds[k]] = ω[ω_inds[k]]
@@ -436,7 +426,7 @@ end
 #                    ψ₊ = solve_scattered(inputs,inputs["ω₀"],inputs["xᵨ₊"],+; isNonLinear = true, ψ_init = ψ₊)
 #                    ψ₋ = solve_scattered(inputs,inputs["ω₀"],inputs["xᵨ₋"],-; isNonLinear = true, ψ_init = ψ₋)
 #
-#                    Ω[ω_inds[k],i,a_inds[k]]  = computePolesL(inputs,Ω[ω_inds[k],i-1,a_inds[k]] ,1, F = 1.)[1][1] 
+#                    Ω[ω_inds[k],i,a_inds[k]]  = computePolesL(inputs,Ω[ω_inds[k],i-1,a_inds[k]] ,1, F = 1.)[1][1]
 #                    Ω₊[ω_inds[k],i,a_inds[k]] = computePolesL(inputs,Ω₊[ω_inds[k],i-1,a_inds[k]],1, F = 1./(1+abs2(ψ₊[:])))[1][1]
 #                    Ω₋[ω_inds[k],i,a_inds[k]] = computePolesL(inputs,Ω₋[ω_inds[k],i-1,a_inds[k]],1, F = 1./(1+abs2(ψ₋[:])))[1][1]
 #
@@ -460,7 +450,7 @@ end
 #        for p in procs(Ω)
 #            @async remotecall_wait(p, computePolesL_parallel_core!, Ω, Ω₊, Ω₋, copy(inputs), ω, N, M)
 #        end
-#    end  
+#    end
 #
 #    return sdata(Ω), sdata(Ω₊), sdata(Ω₋)
 #
@@ -479,7 +469,7 @@ end
 #        for p in procs(Ω)
 #            @async remotecall_wait(p, computeZerosL_parallel_core!, Ω, Ω₊, Ω₋, copy(inputs), ω, N, M, displayOpt)
 #        end
-#    end  
+#    end
 #
 #    return sdata(Ω), sdata(Ω₊), sdata(Ω₋)
 #
