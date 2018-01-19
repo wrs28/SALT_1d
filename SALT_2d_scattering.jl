@@ -416,7 +416,7 @@ function synthesize_source(inputs::InputStruct, k::Complex128)::
 
     inputs1 = deepcopy(inputs)
     inputs1.n₁_vals[inputs1.n₁_inds[inputs1.scatteringRegions]] = 1
-    inputs1.n₂_vals[inputs1.n₂_inds[inputs1.scatteringRegions]] = 1
+    inputs1.n₂_vals[inputs1.n₂_inds[inputs1.scatteringRegions]] = 0
     updateInputs!(inputs1, [:n₁_vals, :n₂_vals], Any[inputs1.n₁_vals, inputs1.n₂_vals]);
 
     k² = k^2
