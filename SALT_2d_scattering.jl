@@ -695,7 +695,31 @@ function analyze_input(inputs::InputStruct, k::Complex128,
     elseif bc_sig in ["dOdd", "dOnn", "dOdn", "dOnd"]
         cm = 0.0im
     elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
-        cm = 0.0im
+        if (inputs.wgd[inputs.channels[m].wg] in ["x", "X"])
+            kₓ, φy = wg_transverse_y(inputs, k, m)
+            if inputs.channels[m].side in ["l", "L", "left", "Left"]
+                x = inputs.x₁[1] - inputs.∂R[1]
+                phs = exp.(-1im*kₓ*x)
+                P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[1,:]
+                ε = inputs.ε_sm[1,inputs.x₂_inds]
+            elseif inputs.channels[m].side in ["r", "R", "right", "Right"]
+                x = inputs.x₁[end] - inputs.∂R[2]
+                phs = exp.(+1im*kₓ*x)
+                P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[end,:]
+                ε = inputs.ε_sm[end,inputs.x₂_inds]
+            end
+            φ = reshape(φy[inputs.x̄_inds],inputs.N[1],:)[1,:]
+        elseif inputs.channels[m].wgd in ["y", "Y"]
+            error("Haven't written vertical waveguide code yet.")
+        end
+        wg_bool = [inputs.channels[q].wg for q in 1:length(inputs.channels)] .== inputs.channels[m].wg
+        tqn_bool = [inputs.channels[q].tqn for q in 1:length(inputs.channels)] .== inputs.channels[m].tqn
+        side_bool = [inputs.channels[q].side for q in 1:length(inputs.channels)] .!== inputs.channels[m].side
+        wg_ind = find(wg_bool .& tqn_bool .& side_bool)
+        if length(wg_ind) > 1
+            error("Channels not uniquely defined.")
+        end
+        cm = sqrt(kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
     elseif (bc_sig in ["OOOO", "IIII"])
         cm = analyze_into_angular_momentum(inputs, k, ψ, m, "in")
     end
