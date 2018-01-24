@@ -593,9 +593,9 @@ function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
     wg_pos_ind = 3
     ind = find( (inputs.r_ext.==(8+inputs.channels[m].wg) )[1,:])[wg_pos_ind]
 
-    fields = [:wgd,:wge,:wgt,:wgp]
+    fields = [:wgd,:wgn,:wgt,:wgp]
     vals = [ String[inputs.wgd[inputs.channels[m].wg]],
-             Float64[inputs.wge[inputs.channels[m].wg]],
+             Float64[inputs.wgn[inputs.channels[m].wg]],
              Float64[inputs.wgt[inputs.channels[m].wg]],
              Float64[inputs.wgp[inputs.channels[m].wg]],0]
     updateInputs!(inputs,fields,vals)
