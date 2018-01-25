@@ -673,6 +673,7 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         if (length(wg_ind)>1) | (length(wg_bal_ind)>1)
             error("Channels not uniquely defined.")
         end
+        println(wg_bal_ind[1])
         bm = inputs.a[wg_bal_ind[1]]*phsb
         cm = sqrt(kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
     elseif (bc_sig in ["OOOO", "IIII"])
