@@ -667,7 +667,7 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         end
         wg_bool = [inputs.channels[q].wg for q in 1:length(inputs.channels)] .== inputs.channels[m].wg
         tqn_bool = [inputs.channels[q].tqn for q in 1:length(inputs.channels)] .== inputs.channels[m].tqn
-        side_bool = [inputs.channels[q].side for q in 1:length(inputs.channels)] .!== inputs.channels[m].side
+        side_bool = [inputs.channels[q].side for q in 1:length(inputs.channels)] .== inputs.channels[m].side
         wg_ind = find(wg_bool .& tqn_bool .& side_bool)
         wg_bal_ind = find(wg_bool .& tqn_bool .& .!side_bool)
         if (length(wg_ind)>1) | (length(wg_bal_ind)>1)
