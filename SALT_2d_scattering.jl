@@ -669,8 +669,8 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         tqn_bool = [inputs.channels[q].tqn for q in 1:length(inputs.channels)] .== inputs.channels[m].tqn
         side_bool = [inputs.channels[q].side for q in 1:length(inputs.channels)] .!== inputs.channels[m].side
         wg_ind = find(wg_bool .& tqn_bool .& side_bool)
-        wg_bal_ind = find(wg_bool .& tqn_bool .& !side_bool)
-        if ( length(wg_ind) | length(wg_bal_ind) )> 1
+        wg_bal_ind = find(wg_bool .& tqn_bool .& .!side_bool)
+        if (length(wg_ind)>1) | (length(wg_bal_ind)>1)
             error("Channels not uniquely defined.")
         end
         bm = inputs.a[wg_bal_ind[1]]*phsb
