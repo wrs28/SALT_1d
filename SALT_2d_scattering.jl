@@ -1,3 +1,7 @@
+################################################################################
+### main routines
+################################################################################
+
 """
 ψ, ϕ, A, inputs = compute_scatter(inputs, k; isNonLinear=false, dispOpt=false, ψ_init=[],
     F=[1.], truncate=false, A=[], fileName="", ftol=2e-8, iter=750)
@@ -393,10 +397,17 @@ end # end of fuction computeS
 
 
 """
-synthesize_source(inputs, k)
+j, ∇², φ₊, φ₋ = synthesize_source(inputs, k)
+
+    φ₊ is the incident field in the absence of the scatterer, though what actually
+        is needed is that φ₊+φ₋ is the total field inside M₊, which is how it's
+        used in the 2-dim open boundary case
+    φ₋ is the outgoing field in the absence of the scatterer. Relevant for one-sided
+        calculations in 1-dim or open boundaries in 2-dim
 """
 function synthesize_source(inputs::InputStruct, k::Complex128)::
-    Tuple{Array{Complex128,1},SparseMatrixCSC{Complex128,Int64},Array{Complex128,1},Array{Complex128,1}}
+    Tuple{Array{Complex128,1},SparseMatrixCSC{Complex128,Int64},
+    Array{Complex128,1},Array{Complex128,1}}
 
     N = prod(inputs.N_ext)
     φ₊ = zeros(Complex128,N)
@@ -429,7 +440,13 @@ end
 
 
 """
-source_mask(inputs)
+M₊, M₋ = source_mask(inputs)
+
+    M₊ is the mask for the incident field, corresponds to a circle or radius ∂S
+        if length(∂S) = 1, and a rectangle with boundaries at the elements of ∂S
+        otherwise
+    M₋ is the mask for the outgoing field, corresponds to a rectangle at PML
+        boundary
 """
 function source_mask(inputs::InputStruct)::Tuple{Array{Bool,1},Array{Bool,1}}
     ∂S = inputs.∂S
@@ -583,7 +600,7 @@ end
 
 
 """
-wg_transverse_y(inputs, m, y)
+kᵤ, φᵤ = wg_transverse_y(inputs, m, y)
 """
 function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
     Tuple{Complex128, Array{Complex128,1}}
@@ -618,13 +635,22 @@ end
 
 
 """
-analyze_output(inputs, k, ψ, m)
+s,t = analyze_output(inputs, k, ψ, m)
+    s is the output coefficient in the mth channel
+    t is the scattered coefficient in the mth channel
+
+    S is constructed from s for unit inputs on each channel
+    T is constructed from t for unit inputs on each channel
+    S = 1 + 2iT, or something like that
 """
 function analyze_output(inputs::InputStruct, k::Complex128,
     ψ::Array{Complex{Float64},1}, m::Int)::Tuple{Complex128,Complex128}
 
-    bm = 0.0im # ballistic coefficient
+    # ballistic component, defined as the component of outgoing radiation in the absence a scatterer
+    bm = 0.0im
+
     bc_sig = inputs.bc_sig
+
     if bc_sig in ["Oddd", "Odnn", "Oddn", "Odnd"]
         x = inputs.x₁[1] - inputs.∂R[2]
         y = inputs.x₂_ext
@@ -634,6 +660,7 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         φ = +sqrt(1/kₓ)*exp(+1im*kₓ*x)*φy
         P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[1,:]
         cm = sum(φ.*P)*inputs.dx̄[2]
+        bm = -inputs.a[m]
     elseif bc_sig in ["dOdd", "dOnn", "dOdn", "dOnd"]
         x = inputs.x₁[end] - inputs.∂R[1]
         y = inputs.x₂_ext
@@ -643,6 +670,7 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         φ = +sqrt(1/kₓ)*exp(-1im*kₓ*x)*φy
         P = reshape(ψ[inputs.x̄_inds],inputs.N[1],:)[end,:]
         cm = sum(φ.*P)*inputs.dx̄[2]
+        bm = -inputs.a[m]
     elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
         if (inputs.wgd[inputs.channels[m].wg] in ["x", "X"])
             kₓ, φy = wg_transverse_y(inputs, k, m)
@@ -665,6 +693,7 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         elseif inputs.channels[m].wgd in ["y", "Y"]
             error("Haven't written vertical waveguide code yet.")
         end
+
         wg_bool = [inputs.channels[q].wg for q in 1:length(inputs.channels)] .== inputs.channels[m].wg
         tqn_bool = [inputs.channels[q].tqn for q in 1:length(inputs.channels)] .== inputs.channels[m].tqn
         side_bool = [inputs.channels[q].side for q in 1:length(inputs.channels)] .== inputs.channels[m].side
@@ -673,29 +702,32 @@ function analyze_output(inputs::InputStruct, k::Complex128,
         if (length(wg_ind)>1) | (length(wg_bal_ind)>1)
             error("Channels not uniquely defined.")
         end
-        println(wg_bal_ind[1])
-        bm = inputs.a[wg_bal_ind[1]]*phsb
+
         cm = sqrt(kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
+        bm = inputs.a[wg_bal_ind[1]]*phsb
     elseif (bc_sig in ["OOOO", "IIII"])
         cm = analyze_into_angular_momentum(inputs, k, ψ, m, "out")
         bm = inputs.a[m]
     end
 
-    return bm, cm
+    return bm+cm, cm
 end
 
 
 """
-analyze_input(inputs, k, ψ, m)
+cm = analyze_input(inputs, k, ψ, m)
+
+    cm is the input power for a CPA input, that is, one where there is no output
 """
 function analyze_input(inputs::InputStruct, k::Complex128,
     ψ::Array{Complex{Float64},1}, m::Int)::Complex128
 
     bc_sig = inputs.bc_sig
+
     if bc_sig in ["Oddd", "Odnn", "Oddn", "Odnd"]
-        cm = 0.0im
+        error("Haven't written input analyzer for one-sided input in a waveguide")
     elseif bc_sig in ["dOdd", "dOnn", "dOdn", "dOnd"]
-        cm = 0.0im
+        error("Haven't written input analyzer for one-sided input in a waveguide")
     elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
         if (inputs.wgd[inputs.channels[m].wg] in ["x", "X"])
             kₓ, φy = wg_transverse_y(inputs, k, m)
@@ -714,6 +746,7 @@ function analyze_input(inputs::InputStruct, k::Complex128,
         elseif inputs.channels[m].wgd in ["y", "Y"]
             error("Haven't written vertical waveguide code yet.")
         end
+
         wg_bool = [inputs.channels[q].wg for q in 1:length(inputs.channels)] .== inputs.channels[m].wg
         tqn_bool = [inputs.channels[q].tqn for q in 1:length(inputs.channels)] .== inputs.channels[m].tqn
         side_bool = [inputs.channels[q].side for q in 1:length(inputs.channels)] .!== inputs.channels[m].side
@@ -721,7 +754,9 @@ function analyze_input(inputs::InputStruct, k::Complex128,
         if length(wg_ind) > 1
             error("Channels not uniquely defined.")
         end
+
         cm = sqrt(kₓ)*phs*sum(φ.*ε.*P)*inputs.dx̄[2]
+
     elseif (bc_sig in ["OOOO", "IIII"])
         cm = analyze_into_angular_momentum(inputs, k, ψ, m, "in")
     end
