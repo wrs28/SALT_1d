@@ -44,7 +44,7 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
             end
             if j == 1
                 k_temp, ψ_temp = computeK_L_core(inputs1, k[i]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
-                K[i,1,ones(Int64,ndims(K)-2)...] = k_temp[1]
+                K[i,j,ones(Int64,ndims(K)-2)...] = k_temp[1]
                 ψ = ψ_temp[:,1]
             else
                 k_temp, ψ_temp = computeK_L_core(inputs1, K[i,j-1,ones(Int64,ndims(K)-2)...]; nk=1, F=F, truncate=truncate, ψ_init=ψ)
@@ -109,6 +109,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
                 end
                 if !isempty(size(getfield(inputs,fields[f])))
                     vals_temp = getfield(inputs,fields[f])
+                    println([f, val_ind])
                     vals_temp[field_inds[f]] = field_vals[f][val_ind]
                     updateInputs!(inputs,fields[f],vals_temp)
                 else
