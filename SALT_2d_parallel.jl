@@ -109,7 +109,7 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
                 end
                 if !isempty(size(getfield(inputs,fields[f])))
                     vals_temp = getfield(inputs,fields[f])
-                    println([f, val_ind])
+                    println([f, val_ind, dim])
                     vals_temp[field_inds[f]] = field_vals[f][val_ind]
                     updateInputs!(inputs,fields[f],vals_temp)
                 else
