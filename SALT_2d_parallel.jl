@@ -25,7 +25,7 @@ function computeK_L_core(inputs::InputStruct, k::Complex128, fields::Array{Symbo
 end
 function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Array{Symbol,1},
     field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, F::Array{Float64,1},
-    truncate::Bool, ψ_init::Array{Complex128,1})::SharedArray
+    truncate::Bool, ψ_init::Array{Complex128,1}, dispOpt::Bool)::SharedArray
 
     nk = length(k)
     dims = tuple(nk, length.(field_vals)...)
@@ -33,6 +33,9 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
     ψ = Complex128[]
 
     inputs1 = deepcopy(inputs)
+    if dispOpt
+        println("Processing dimension 1")
+    end
     for i in 1:nk
         for j in 1:length(field_vals[1])
             if !isempty(size(getfield(inputs1,fields[1])))
@@ -55,6 +58,9 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
     end
 
     for d in 3:ndims(K)
+        if dispOpt
+            println("Processing dimension $(d-1)")
+        end
         @sync for p in procs(K)
             @async remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
                                     field_vals, d, F, truncate, ψ_init)
@@ -110,7 +116,6 @@ function computeK_L_core!(K::SharedArray, inputs::InputStruct, fields::Array{Sym
                     val_ind = 1
                 end
                 if !isempty(size(getfield(inputs,fields[f])))
-                    println([f, val_ind, dim, d])
                     vals_temp = getfield(inputs,fields[f])
                     vals_temp[field_inds[f]] = field_vals[f][val_ind]
                     updateInputs!(inputs,fields[f],vals_temp)
@@ -145,11 +150,11 @@ end # end of function computeZero_L
 function computeZero_L(inputs1::InputStruct, k::Union{Array{Complex128,1},Array{Float64,1},Array{Int,1}},
     fields::Array{Symbol,1}, field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1};
     F::Array{Float64,1}=[1.], truncate::Bool=false,
-    ψ_init::Array{Complex128,1}=Complex128[])::SharedArray
+    ψ_init::Array{Complex128,1}=Complex128[], dispOpt::Bool=false)::SharedArray
 
     inputs = open_to_pml_in(inputs1)
 
-    K = computeK_L_core(inputs, complex(1.0.*k), fields, field_inds, field_vals, F, truncate, ψ_init)
+    K = computeK_L_core(inputs, complex(1.0.*k), fields, field_inds, field_vals, F, truncate, ψ_init, dispOpt)
 end # end of function computeZero_L
 
 
