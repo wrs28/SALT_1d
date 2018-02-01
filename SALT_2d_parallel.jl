@@ -34,7 +34,7 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
 
     inputs1 = deepcopy(inputs)
     if dispOpt
-        println("Processing dimension 1")
+        println("Computing dimension 1")
     end
     for i in 1:nk
         for j in 1:length(field_vals[1])
@@ -59,7 +59,7 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
 
     for d in 3:ndims(K)
         if dispOpt
-            println("Processing dimension $(d-1)")
+            println("Computing dimension $(d-1)")
         end
         @sync for p in procs(K)
             @async remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
