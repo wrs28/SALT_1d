@@ -54,7 +54,7 @@ function wavePlot(ψ::Union{Array{Complex{Float64},1}, Array{Complex{Float64},2}
         subplots_adjust(wspace=0.0)
 
         subplot(N+1,3,1); axt = gca()
-        pcolormesh(x₁, x₂, transpose(real(sqrt.(ɛ_sm))), cmap="bwr") #transpose(r))
+        pcolormesh(x₁, x₂, transpose(real(sqrt.(ɛ_sm)))) #transpose(r))
         xlim( [ ∂R[1],∂R[2] ] )
         ylim( [ ∂R[3],∂R[4] ] )
         axis("tight")
@@ -63,7 +63,7 @@ function wavePlot(ψ::Union{Array{Complex{Float64},1}, Array{Complex{Float64},2}
         setp(axt[:xaxis][:set_label_position]("top"))
 
         subplot(N+1,3,2); axt = gca()
-        pcolormesh(x₁, x₂, transpose(imag(sqrt.(ɛ_sm))))
+        pcolormesh(x₁, x₂, transpose(imag(sqrt.(ɛ_sm))), cmap="bwr")
         xlim( [ ∂R[1],∂R[2] ] )
         ylim( [ ∂R[3],∂R[4] ] )
         axis("tight")
