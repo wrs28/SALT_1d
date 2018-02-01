@@ -66,6 +66,7 @@ function wavePlot(ψ::Union{Array{Complex{Float64},1}, Array{Complex{Float64},2}
         pcolormesh(x₁, x₂, transpose(imag(sqrt.(ɛ_sm))), cmap="bwr")
         xlim( [ ∂R[1],∂R[2] ] )
         ylim( [ ∂R[3],∂R[4] ] )
+        clim([-1,1]*findmax(abs.(imag(sqrt.(ε_sm))))[1])
         axis("tight")
         xlabel("Imag")
         setp(axt[:get_xticklabels](),visible=false)
