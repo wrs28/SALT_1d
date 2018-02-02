@@ -37,10 +37,10 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
         # for j in [1]#:length(field_vals[1])
             if !isempty(size(getfield(inputs1,fields[1])))
                 vals_temp = getfield(inputs1,fields[1])
-                vals_temp[field_inds[1]] = field_vals[1][j]
+                vals_temp[field_inds[1]] = field_vals[1][1]
                 updateInputs!(inputs1,fields[1],vals_temp)
             else
-                updateInputs!(inputs1,fields[1],field_vals[1][j])
+                updateInputs!(inputs1,fields[1],field_vals[1][1])
             end
             # if j == 1
                 k_temp, ψ_temp = computeK_L_core(inputs1, k[i]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
