@@ -37,7 +37,7 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
         println("Computing dimension 1")
     end
     for i in 1:nk
-        for j in [1]#:length(field_vals[1])
+        # for j in [1]#:length(field_vals[1])
             if !isempty(size(getfield(inputs1,fields[1])))
                 vals_temp = getfield(inputs1,fields[1])
                 vals_temp[field_inds[1]] = field_vals[1][j]
@@ -45,16 +45,16 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
             else
                 updateInputs!(inputs1,fields[1],field_vals[1][j])
             end
-            if j == 1
+            # if j == 1
                 k_temp, ψ_temp = computeK_L_core(inputs1, k[i]; nk=1, F=F, truncate=truncate, ψ_init=ψ_init)
-                K[i,j,ones(Int64,ndims(K)-2)...] = k_temp[1]
+                K[i,1,ones(Int64,ndims(K)-2)...] = k_temp[1]
                 ψ = ψ_temp[:,1]
-            else
-                k_temp, ψ_temp = computeK_L_core(inputs1, K[i,j-1,ones(Int64,ndims(K)-2)...]; nk=1, F=F, truncate=truncate, ψ_init=ψ)
-                K[i,j,ones(Int64,ndims(K)-2)...] = k_temp[1]
-                ψ = ψ_temp[:,1]
-            end
-        end
+            # else
+            #     k_temp, ψ_temp = computeK_L_core(inputs1, K[i,j-1,ones(Int64,ndims(K)-2)...]; nk=1, F=F, truncate=truncate, ψ_init=ψ)
+            #     K[i,j,ones(Int64,ndims(K)-2)...] = k_temp[1]
+            #     ψ = ψ_temp[:,1]
+            # end
+        # end
     end
 
     # for d in 3:ndims(K)
