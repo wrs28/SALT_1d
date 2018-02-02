@@ -33,9 +33,6 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
     ψ = Complex128[]
 
     inputs1 = deepcopy(inputs)
-    if dispOpt
-        println("Computing dimension 1")
-    end
     for i in 1:nk
         # for j in [1]#:length(field_vals[1])
             if !isempty(size(getfield(inputs1,fields[1])))
