@@ -55,6 +55,7 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
     end
 
     # for d in 3:ndims(K)
+    r = Channel(length(procs(K)))
     for d in 2:ndims(K)
         if dispOpt
             println("Computing dimension $(d-1)")
@@ -65,14 +66,15 @@ function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Ar
                                         field_vals, d, F, truncate, ψ_init)
             end
         else
-            @async for p in procs(K)
-                @async remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
-                                        field_vals, d, F, truncate, ψ_init)
+
+            for p in procs(K)
+                @async put!(r,remotecall_fetch(computeK_L_core!, p, K, inputs, fields, field_inds,
+                                        field_vals, d, F, truncate, ψ_init))
             end
         end
     end
 
-    return K
+    return K, r
 end
 
 
