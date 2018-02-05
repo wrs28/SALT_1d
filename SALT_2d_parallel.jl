@@ -25,7 +25,7 @@ function computeK_L_core(inputs::InputStruct, k::Complex128, fields::Array{Symbo
 end
 function computeK_L_core(inputs::InputStruct, k::Array{Complex128,1}, fields::Array{Symbol,1},
     field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1}, F::Array{Float64,1},
-    truncate::Bool, ψ_init::Array{Complex128,1}, dispOpt::Bool)::SharedArray
+    truncate::Bool, ψ_init::Array{Complex128,1}, dispOpt::Bool)::Tuple{SharedArray,Channel}
 
     nk = length(k)
     dims = tuple(nk, length.(field_vals)...)
