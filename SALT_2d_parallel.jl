@@ -157,7 +157,7 @@ end # end of function computeZero_L
 function computeZero_L(inputs1::InputStruct, k::Union{Array{Complex128,1},Array{Float64,1},Array{Int,1}},
     fields::Array{Symbol,1}, field_inds::Array{Int,1}, field_vals::Array{Array{Float64,1},1};
     F::Array{Float64,1}=[1.], truncate::Bool=false,
-    ψ_init::Array{Complex128,1}=Complex128[], dispOpt::Bool=false)::SharedArray
+    ψ_init::Array{Complex128,1}=Complex128[], dispOpt::Bool=false)::Tuple{SharedArray,Channel}
 
     inputs = open_to_pml_in(inputs1)
 
