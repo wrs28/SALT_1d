@@ -136,15 +136,19 @@ function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
                 printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}{4:+2.3f}i.",ii,nk,real(k[ii]),imag(k[ii]))
             end
         end
-
+println("here 1")
         ζ = lufact(speye(1,1))
 
         for m in 1:M
+            println("here 2")
             a = 0*a
             a[m] = 1.
             updateInputs!(inputs, :a, a)
+            println("here 3")
             ψ, ϕ, ζ, inputs_s = compute_scatter(inputs, k[ii]; A=ζ)
+            println("here 4")
             for m′ in 1:M
+                println("here 5")
                  cm = analyze_output(inputs_s, k[ii], ψ, m′)
                  S[ii,m,m′,1] = cm
             end
