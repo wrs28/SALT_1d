@@ -48,7 +48,7 @@ end # end of function compute_scatter
 
 
 """
-S =  computeS(inputs; isNonLinear=false, F=[1.], dispOpt = true,
+S =  computeS(inputs, k; isNonLinear=false, F=[1.], dispOpt = true,
                                     N=1, N_Type="D", ψ_init = [], fileName = "")
 
     N is the number of steps to go from D0 = 0 to given D0
@@ -121,18 +121,18 @@ function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
     fileName::String = "")::Array{Complex128,4}
 
     M = length(inputs.channels)
-    S = NaN*ones(Complex128,length(inputs.k),M,M,1)
+    S = NaN*ones(Complex128,k,M,M,1)
     a_original = inputs.a
     a = zeros(Complex128,M)
     ψ = Array{Complex128}(1)
 
-    for ii in 1:length(inputs.k)
+    for ii in 1:length(k)
         k = inputs.k[ii]
         if (ii/1 == round(ii/1)) & dispOpt
             if typeof(k)<:Real
-                printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}.",ii,length(inputs.k),k)
+                printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}.",ii,length(k),k)
             else
-                printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}{4:+2.3f}i.",ii,length(inputs.k),real(k),imag(k))
+                printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}{4:+2.3f}i.",ii,length(k),real(k),imag(k))
             end
         end
 
