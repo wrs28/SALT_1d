@@ -123,7 +123,7 @@ function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
     nk = length(k)
 
     M = length(inputs.channels)
-    S = NaN*ones(Complex128,nk,M,length(channels),1)
+    S = NaN*ones(Complex128,nk,length(channels),M,1)
     a_original = inputs.a
     a = zeros(Complex128,M)
     ψ = Array{Complex128}(1)
