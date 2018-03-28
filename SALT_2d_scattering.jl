@@ -120,19 +120,20 @@ function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
     F::Array{Float64,1}=[1.], dispOpt::Bool=true,
     fileName::String = "")::Array{Complex128,4}
 
+    nk = length(k)
+
     M = length(inputs.channels)
-    S = NaN*ones(Complex128,k,M,M,1)
+    S = NaN*ones(Complex128,nk,M,M,1)
     a_original = inputs.a
     a = zeros(Complex128,M)
     ψ = Array{Complex128}(1)
 
-    for ii in 1:length(k)
-        k = inputs.k[ii]
+    for ii in 1:nk
         if (ii/1 == round(ii/1)) & dispOpt
             if typeof(k)<:Real
-                printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}.",ii,length(k),k)
+                printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}.",ii,nk,k[ii])
             else
-                printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}{4:+2.3f}i.",ii,length(k),real(k),imag(k))
+                printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}{4:+2.3f}i.",ii,nk,real(k[ii]),imag(k[ii]))
             end
         end
 
@@ -142,9 +143,9 @@ function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
             a = 0*a
             a[m] = 1.
             updateInputs!(inputs, :a, a)
-            ψ, ϕ, ζ, inputs_s = compute_scatter(inputs, k; A=ζ)
+            ψ, ϕ, ζ, inputs_s = compute_scatter(inputs, k[ii]; A=ζ)
             for m′ in 1:M
-                 cm = analyze_output(inputs_s, k, ψ, m′)
+                 cm = analyze_output(inputs_s, k[ii], ψ, m′)
                  S[ii,m,m′,1] = cm
             end
         end
