@@ -120,6 +120,7 @@ function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
     channels::Array{Int,1}=Array(1:length(inputs.channels)), F::Array{Float64,1}=[1.],
     dispOpt::Bool=true, fileName::String = "")::Array{Complex128,4}
 
+    nc = length(channels)
     nk = length(k)
 
     M = length(inputs.channels)
@@ -139,9 +140,9 @@ function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
 
         ζ = lufact(speye(1,1))
 
-        for m in channels
+        for m in nc
             a = 0*a
-            a[m] = 1.
+            a[channels[m]] = 1.
             updateInputs!(inputs, :a, a)
             ψ, ζ, inputs_s = compute_scatter(inputs, k[ii]; A=ζ)
             for m′ in 1:M
