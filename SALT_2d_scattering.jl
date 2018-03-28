@@ -140,7 +140,7 @@ function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
 
         ζ = lufact(speye(1,1))
 
-        for m in nc
+        for m in 1:nc
             a = 0*a
             a[channels[m]] = 1.
             updateInputs!(inputs, :a, a)
