@@ -435,7 +435,7 @@ end # end of function computeS_parallel!
 """
 computeS_parallel_core!
 """
-function computeS_parallel_core!(S::SharedArray, inputs::InputStruct, k::Array{Complex128,1}; channels::Array{Int1}=Array(1:length(inputs.channels)),
+function computeS_parallel_core!(S::SharedArray, inputs::InputStruct, k::Array{Complex128,1}; channels::Array{Int64}=Array(1:length(inputs.channels)),
     isNonLinear::Bool=false, F::Array{Float64,1}=[1.], dispOpt::Bool=true, N::Int=1, N_Type::String="D")::SharedArray
 
     nc = length(inputs.channels)
