@@ -144,7 +144,7 @@ println("here 1")
             a = 0*a
             a[m] = 1.
             updateInputs!(inputs, :a, a)
-            println("here 3")
+            println("here 3 hi hi")
             ψ, ζ, inputs_s = compute_scatter(inputs, k[ii]; A=ζ)
             println("here 4")
             for m′ in 1:M
