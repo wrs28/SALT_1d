@@ -55,9 +55,9 @@ S =  computeS(inputs, k; isNonLinear=false, F=[1.], dispOpt = true,
 """
 function computeS(inputs::InputStruct,
     k::Union{Array{Complex128,1},Array{Float64,1},Complex128,Float64,Int};
-    isNonLinear::Bool=false, F::Array{Float64,1}=[1.], dispOpt::Bool=true,
-    fileName::String = "", N::Int=1, N_Type::String="D",
-    ψ_init::Array{Complex128,1}=Complex128[])::Array{Complex128,4}
+    channels::Array{Int,1}=Array(1:length(inputs.channels)), isNonLinear::Bool=false,
+    F::Array{Float64,1}=[1.], dispOpt::Bool=true, fileName::String = "",
+    N::Int=1, N_Type::String="D", ψ_init::Array{Complex128,1}=Complex128[])::Array{Complex128,4}
 
     if isempty(k)
         K = Complex128[k]
@@ -66,9 +66,9 @@ function computeS(inputs::InputStruct,
     end
 
     if !isNonLinear
-        S = computeS_linear(inputs, K; F=F, dispOpt=dispOpt, fileName=fileName)
+        S = computeS_linear(inputs, K; channels=channels, F=F, dispOpt=dispOpt, fileName=fileName)
     elseif isNonLinear
-        S = computeS_nonlinear(inputs, K; N=N, N_Type=N_Type, isNonLinear=isNonLinear,
+        S = computeS_nonlinear(inputs, K; channels=channels, N=N, N_Type=N_Type, isNonLinear=isNonLinear,
                             F=F, dispOpt=dispOpt, ψ_init=ψ_init, fileName=fileName)
     end
 
@@ -117,13 +117,13 @@ end # end of function computePsi_linear
 S =  computeS_linear(inputs; F=[1.], dispOpt=true, fileName = "")
 """
 function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
-    F::Array{Float64,1}=[1.], dispOpt::Bool=true,
-    fileName::String = "")::Array{Complex128,4}
+    channels::Array{Int,1}=Array(1:length(inputs.channels)), F::Array{Float64,1}=[1.],
+    dispOpt::Bool=true, fileName::String = "")::Array{Complex128,4}
 
     nk = length(k)
 
     M = length(inputs.channels)
-    S = NaN*ones(Complex128,nk,M,M,1)
+    S = NaN*ones(Complex128,nk,M,length(channels),1)
     a_original = inputs.a
     a = zeros(Complex128,M)
     ψ = Array{Complex128}(1)
@@ -136,19 +136,15 @@ function computeS_linear(inputs::InputStruct, k::Array{Complex128,1};
                 printfmtln("Solving for frequency {1:d} of {2:d}, ω = {3:2.3f}{4:+2.3f}i.",ii,nk,real(k[ii]),imag(k[ii]))
             end
         end
-println("here 1")
+
         ζ = lufact(speye(1,1))
 
-        for m in 1:M
-            println("here 2")
+        for m in channels
             a = 0*a
             a[m] = 1.
             updateInputs!(inputs, :a, a)
-            println("here 3 hi hi")
             ψ, ζ, inputs_s = compute_scatter(inputs, k[ii]; A=ζ)
-            println("here 4")
             for m′ in 1:M
-                println("here 5")
                  cm = analyze_output(inputs_s, k[ii], ψ, m′)
                  S[ii,m,m′,1] = cm
             end
