@@ -410,6 +410,7 @@ function computeS_parallel(inputs::InputStruct, k::Array{Complex128,1}; isNonLin
     r = Channel(length(P))
     for pp in 1:length(P)
         p = P[pp]
+        println(p)
         @async remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs), k;
                     channels=channels, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type)
     end
@@ -460,7 +461,7 @@ function computeS_parallel_core!(S::SharedArray, inputs::InputStruct, k::Array{C
         a_inds = Array(Int,ncsplits[a_idx]+1:ncsplits[a_idx+1])
         k_inds = Array(Int,nksplits[k_idx]+1:nksplits[k_idx+1])
     end
-
+println(idx)
      S[k_inds,a_inds,:,:] = idx # = computeS(deepcopy(inputs), k[k_inds]; channels=a_inds,
             # isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type)
 
