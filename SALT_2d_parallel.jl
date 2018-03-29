@@ -415,7 +415,7 @@ function computeS_parallel(inputs::InputStruct, k::Array{Complex128,1}; isNonLin
                     channels=channels, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type)
     end
 
-    return S,r
+    return S
 end # end of function computeS_parallel
 
 
@@ -461,9 +461,9 @@ function computeS_parallel_core!(S::SharedArray, inputs::InputStruct, k::Array{C
         a_inds = Array(ncsplits[a_idx]+1:ncsplits[a_idx+1])
         k_inds = Array(nksplits[k_idx]+1:nksplits[k_idx+1])
     end
-println(idx)
-     S[k_inds,a_inds,:,:] = idx # = computeS(deepcopy(inputs), k[k_inds]; channels=a_inds,
-            # isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type)
+
+     S[k_inds,a_inds,:,:] = computeS(deepcopy(inputs), k[k_inds]; channels=a_inds,
+             isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type)
 
     return S
 end # end of function computeS_parallel_core!
