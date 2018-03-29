@@ -457,8 +457,8 @@ function computeS_parallel_core!(S::SharedArray, inputs::InputStruct, k::Array{C
     nksplits = [round(Int, s) for s in linspace(0, nk, mchunks+1)]
     a_idx, k_idx = ind2sub(zeros(Int,nchunks,mchunks),idx)
 
-    a_inds = ncsplits[a_idx]+1:ncsplits[a_idx+1]
-    k_inds = nksplits[k_idx]+1:nksplits[k_idx+1]
+    a_inds = Array(Int,ncsplits[a_idx]+1:ncsplits[a_idx+1])
+    k_inds = Array(Int,nksplits[k_idx]+1:nksplits[k_idx+1])
 
     S[k_inds,a_inds,:,:] = computeS(deepcopy(inputs), k[k_inds]; channels=a_inds,
             isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type)
