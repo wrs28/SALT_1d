@@ -390,8 +390,8 @@ end # end of function computeUZR_NL2_parallel
 """
 defaults to running S only on workers, not on head node. Use computeS_parallel! for a little more control
 """
-function computeS_parallel(inputs::InputStruct; isNonLinear::Bool=false,
-    F::Array{Float64,1}=[1.], dispOpt::Bool = true, fileName::String = "",
+function computeS_parallel(inputs::InputStruct, k::Array{Float64,1}; isNonLinear::Bool=false,
+    channels::Array{Int,1}=Array(1:length(inputs.channels)), F::Array{Float64,1}=[1.], dispOpt::Bool = true, fileName::String = "",
     N::Int=1, N_Type::String="D")
 
     if isempty(fileName)
@@ -409,7 +409,7 @@ function computeS_parallel(inputs::InputStruct; isNonLinear::Bool=false,
     for pp in 1:length(P)
         p = P[pp]
         @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs);
-                    isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type) )
+                    channels=channels, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type) )
     end
 
     return S,r
@@ -419,14 +419,14 @@ end # end of function computeS_parallel
 """
 computeS_parallel!
 """
-function computeS_parallel!(S::SharedArray,inputs::InputStruct; isNonLinear::Bool=false,
-    F::Array{Float64,1}=[1.], dispOpt::Bool=true, N::Int=1, N_Type::String="D")
+function computeS_parallel!(S::SharedArray, inputs::InputStruct, k::Array{Complex128,1}; channels::Array{Int64}=Array(1:length(inputs.channels));
+    isNonLinear::Bool=false, F::Array{Float64,1}=[1.], dispOpt::Bool=true, N::Int=1, N_Type::String="D")
 
     P = procs(S)
     r = Channel(length(P))
     for pp in 1:length(P)
        p = P[pp]
-       @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs);
+       @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs); channels=channels
                    isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type))
     end
 end # end of function computeS_parallel!
@@ -440,17 +440,25 @@ function computeS_parallel_core!(S::SharedArray, inputs::InputStruct, k::Array{C
 
     nc = length(inputs.channels)
     nk = length(k)
+    M = length(procs(S))
 
     idx = indexpids(S)
-    if idx == 0 # This worker is not assigned a piece
+
+    nchunks = ceil(Int,sqrt(M))
+    mchunks = floor(Int,M/nchunks)
+
+    if idx == 0 || idx > nchunks*mchunks # This worker is not assigned a piece
         return 1:0
     end
-    nchunks = length(procs(S))
-    splits = [round(Int, s) for s in linspace(0, prod(size(S)[1:2]) , nchunks+1)]
-    inds = splits[idx]+1:splits[idx+1]
-    k_inds, a_inds = ind2sub(S[:,:,1,1],inds)
 
-    S[k_inds,:,:,:] = computeS(deepcopy(inputs), k[k_inds]; channels=a_inds,
+    ncsplits = [round(Int, s) for s in linspace(0, nc, nchunks+1)]
+    nksplits = [round(Int, s) for s in linspace(0, nk, mchunks+1)]
+    a_idx, k_idx = ind2sub(zeros(Int,nchunks,mchunks),idx)
+
+    a_inds = ncsplits[a_idx]+1:ncsplits[a_idx+1]
+    k_inds = nksplits[k_idx]+1:nksplits[k_idx+1]
+
+    S[k_inds,a_inds,:,:] = computeS(deepcopy(inputs), k[k_inds]; channels=a_inds,
             isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type)
     return S
 end # end of function computeS_parallel_core!
