@@ -390,14 +390,16 @@ end # end of function computeUZR_NL2_parallel
 """
 defaults to running S only on workers, not on head node. Use computeS_parallel! for a little more control
 """
-function computeS_parallel(inputs::InputStruct, k::Array{Float64,1}; isNonLinear::Bool=false,
+function computeS_parallel(inputs::InputStruct, k::Array{Complex128,1}; isNonLinear::Bool=false,
     channels::Array{Int,1}=Array(1:length(inputs.channels)), F::Array{Float64,1}=[1.], dispOpt::Bool = true, fileName::String = "",
     N::Int=1, N_Type::String="D")
 
+    M = length(inputs.channels)
+
     if isempty(fileName)
-        S = SharedArray{Complex128}((length(k),2,2,N), pids=workers())
+        S = SharedArray{Complex128}((length(k),M,M,N), pids=workers())
     else
-        S = SharedArray{Complex128}(abspath(fileName),(length(k),2,2,N), pids=workers(), mode="w+")
+        S = SharedArray{Complex128}(abspath(fileName),(length(k),M,M,N), pids=workers(), mode="w+")
     end
 
     for i in 1:length(S)
