@@ -395,9 +395,9 @@ function computeS_parallel(inputs::InputStruct, k::Array{Float64,1}; isNonLinear
     N::Int=1, N_Type::String="D")
 
     if isempty(fileName)
-        S = SharedArray(Complex128,(length(inputs.k),2,2,N), pids=workers())
+        S = SharedArray(Complex128,(length(k),2,2,N), pids=workers())
     else
-        S = SharedArray(abspath(fileName),Complex128,(length(inputs.k),2,2,N), pids=workers(), mode="w+")
+        S = SharedArray(abspath(fileName),Complex128,(length(k),2,2,N), pids=workers(), mode="w+")
     end
 
     for i in 1:length(S)
@@ -408,7 +408,7 @@ function computeS_parallel(inputs::InputStruct, k::Array{Float64,1}; isNonLinear
     r = Channel(length(P))
     for pp in 1:length(P)
         p = P[pp]
-        @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs);
+        @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs), k;
                     channels=channels, isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type) )
     end
 
