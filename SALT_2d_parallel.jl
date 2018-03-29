@@ -395,9 +395,9 @@ function computeS_parallel(inputs::InputStruct, k::Array{Float64,1}; isNonLinear
     N::Int=1, N_Type::String="D")
 
     if isempty(fileName)
-        S = SharedArray(Complex128,(length(k),2,2,N), pids=workers())
+        S = SharedArray{Complex128}((length(k),2,2,N), pids=workers())
     else
-        S = SharedArray(abspath(fileName),Complex128,(length(k),2,2,N), pids=workers(), mode="w+")
+        S = SharedArray{Complex128}(abspath(fileName),(length(k),2,2,N), pids=workers(), mode="w+")
     end
 
     for i in 1:length(S)
