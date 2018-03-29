@@ -60,6 +60,7 @@ function computeS(inputs::InputStruct,
     N::Int=1, N_Type::String="D", ψ_init::Array{Complex128,1}=Complex128[])::Array{Complex128,4}
 
     if isempty(k)
+        println("hi")
         K = Complex128[k]
     else
         K = complex(1.0*k)
