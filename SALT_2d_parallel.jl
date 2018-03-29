@@ -450,18 +450,20 @@ function computeS_parallel_core!(S::SharedArray, inputs::InputStruct, k::Array{C
     mchunks = floor(Int,M/nchunks)
 
     if idx == 0 || idx > nchunks*mchunks # This worker is not assigned a piece
-        return 1:0
+        a_inds = 1:0
+        k_inds = 10:0
+    else
+        ncsplits = [round(Int, s) for s in linspace(0, nc, nchunks+1)]
+        nksplits = [round(Int, s) for s in linspace(0, nk, mchunks+1)]
+        a_idx, k_idx = ind2sub(zeros(Int,nchunks,mchunks),idx)
+
+        a_inds = Array(Int,ncsplits[a_idx]+1:ncsplits[a_idx+1])
+        k_inds = Array(Int,nksplits[k_idx]+1:nksplits[k_idx+1])
     end
 
-    ncsplits = [round(Int, s) for s in linspace(0, nc, nchunks+1)]
-    nksplits = [round(Int, s) for s in linspace(0, nk, mchunks+1)]
-    a_idx, k_idx = ind2sub(zeros(Int,nchunks,mchunks),idx)
+     S[k_inds,a_inds,:,:] = idx # = computeS(deepcopy(inputs), k[k_inds]; channels=a_inds,
+            # isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type)
 
-    a_inds = Array(Int,ncsplits[a_idx]+1:ncsplits[a_idx+1])
-    k_inds = Array(Int,nksplits[k_idx]+1:nksplits[k_idx+1])
-
-    S[k_inds,a_inds,:,:] = computeS(deepcopy(inputs), k[k_inds]; channels=a_inds,
-            isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type)
     return S
 end # end of function computeS_parallel_core!
 
