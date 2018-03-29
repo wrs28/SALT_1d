@@ -426,7 +426,7 @@ function computeS_parallel!(S::SharedArray, inputs::InputStruct, k::Array{Comple
     r = Channel(length(P))
     for pp in 1:length(P)
        p = P[pp]
-       @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs); channels=channels
+       @async put!(r, remotecall_fetch(computeS_parallel_core!, p, S, deepcopy(inputs); channels=channels,
                    isNonLinear=isNonLinear, F=F, dispOpt=dispOpt, N=N, N_Type=N_Type))
     end
 end # end of function computeS_parallel!
