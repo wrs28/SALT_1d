@@ -59,7 +59,6 @@ function computeS(inputs::InputStruct,
     F::Array{Float64,1}=[1.], dispOpt::Bool=true, fileName::String = "",
     N::Int=1, N_Type::String="D", ψ_init::Array{Complex128,1}=Complex128[])::Array{Complex128,4}
 
-println("hi")
     K = complex(1.0*k)
 
     if !isNonLinear
