@@ -450,8 +450,8 @@ function computeS_parallel_core!(S::SharedArray, inputs::InputStruct, k::Array{C
     mchunks = min(max(1,floor(Int,M/nchunks)),nk)
 
     if idx == 0 || idx > nchunks*mchunks # This worker is not assigned a piece
-        a_inds = 1:0
-        k_inds = 10:0
+        a_inds = Array(1:0)
+        k_inds = 1:0
     else
         ncsplits = [round(Int, s) for s in linspace(0, nc, nchunks+1)]
         nksplits = [round(Int, s) for s in linspace(0, nk, mchunks+1)]
