@@ -91,10 +91,13 @@ function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
         if inputs.channels[m].side in ["l", "L", "left", "Left"]
             x = inputs.x̄_ext[1] - inputs.∂R[1]
             φ₊ = +sqrt(1/real(kₓ))*exp.(+1im*kₓ*x).*φy
+            φ₋ = φ₊.*(inputs.∂S[2] .≤ inputs.x̄_ext[1] .< inputs.∂R[2])
         elseif inputs.channels[m].side in ["r", "R", "right", "Right"]
             x = inputs.x̄_ext[1] - inputs.∂R[2]
             φ₊ = +sqrt(1/real(kₓ))*exp.(-1im*kₓ*x).*φy
+            φ₋ = φ₊.*(inputs.∂R[1] .< inputs.x̄_ext[1] .≤ inputs.∂S[1])
         end
+
     elseif (bc_sig in ["OOOO", "IIII"])
         x = inputs.x̄_ext[1]
         y = inputs.x̄_ext[2]

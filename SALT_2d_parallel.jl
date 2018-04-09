@@ -446,8 +446,8 @@ function computeS_parallel_core!(S::SharedArray, inputs::InputStruct, k::Array{C
 
     idx = indexpids(S)
 
-    nchunks = ceil(Int,sqrt(M))
-    mchunks = floor(Int,M/nchunks)
+    nchunks = max(1,floor(Int,sqrt(M*nc/nk)))
+    mchunks = max(1,floor(Int,M/nchunks))
 
     if idx == 0 || idx > nchunks*mchunks # This worker is not assigned a piece
         a_inds = 1:0
