@@ -12,22 +12,24 @@ function synthesize_source(inputs::InputStruct, k::Complex128)::
     φt₋ = zeros(Complex128,N)
 
     M₊, M₋ = source_mask(inputs)
-
+    ε_sm = zeros(inputs1.ε_sm)
     for m in 1:length(inputs.channels)
-        φt₊, φt₋ = incident_modes(inputs, k, m)
+        φt₊, φt₋,ε_t = incident_modes(inputs, k, m)
+        ε_sm += ε_t
         φ₊ += inputs.a[m]*φt₊
         φ₋ += inputs.a[m]*φt₋
     end
-
+    ε_sm += 1-length(inputs.channels)
     ∇² = laplacian(k,inputs)
 
-    inputs1 = deepcopy(inputs)
-    inputs1.n₁_vals[inputs1.n₁_inds[inputs1.scatteringRegions]] = 1.
-    inputs1.n₂_vals[inputs1.n₂_inds[inputs1.scatteringRegions]] = 0.
-    updateInputs!(inputs1, [:n₁_vals, :n₂_vals], Any[inputs1.n₁_vals, inputs1.n₂_vals]);
+    # inputs1 = deepcopy(inputs)
+    # inputs1.n₁_vals[inputs1.n₁_inds[inputs1.scatteringRegions]] = 1.
+    # inputs1.n₂_vals[inputs1.n₂_inds[inputs1.scatteringRegions]] = 0.
+    # updateInputs!(inputs1, [:n₁_vals, :n₂_vals], Any[inputs1.n₁_vals, inputs1.n₂_vals]);
 
     k² = k^2
-    ɛk² = sparse(1:N, 1:N, inputs1.ɛ_sm[:]*k², N, N, +)
+    # ɛk² = sparse(1:N, 1:N, inputs1.ɛ_sm[:]*k², N, N, +)
+    ɛk² = sparse(1:N, 1:N, ɛ_sm[:]*k², N, N, +)
 
     j = (∇²+ɛk²)*(M₊.*φ₊ + M₋.*φ₋)
 
@@ -64,7 +66,7 @@ end
 incidentModes(inputs, k, m)
 """
 function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
-    Tuple{Array{Complex128,1},Array{Complex128,1}}
+    Tuple{Array{Complex128,1},Array{Complex128,1},Array{Complex128,1}}
 
     φ₊ = zeros(Complex128, prod(inputs.N_ext))
     φ₋ = zeros(Complex128, prod(inputs.N_ext))
@@ -87,7 +89,7 @@ function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
         φ₊ = +sqrt(1/real(kₓ))*exp(-1im*kₓ*x).*φy
         φ₋ = -sqrt(1/real(kₓ))*exp(+1im*kₓ*x).*φy
     elseif (bc_sig in ["OOOO", "IIII"]) && (!isempty(inputs.wgd))
-        kₓ, φy = wg_transverse_y(inputs, k, m)
+        kₓ, φy, ε_sm = wg_transverse_y(inputs, k, m)
         if inputs.channels[m].side in ["l", "L", "left", "Left"]
             x = inputs.x̄_ext[1] - inputs.∂R[1]
             φ₊ = +sqrt(1/real(kₓ))*exp.(+1im*kₓ*x).*φy
@@ -109,7 +111,7 @@ function incident_modes(inputs::InputStruct, k::Complex128, m::Int)::
         φ₋[M₋ .& .!M₊] = exp.(1im*q*θ[M₋ .& .!M₊]).*hankelh1.(q,k*r[M₋ .& .!M₊])/2
     end
 
-    return φ₊, φ₋
+    return φ₊, φ₋, ε_sm
 end
 
 
@@ -233,7 +235,7 @@ function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int,dummy::Bool
     return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy)
 end
 function wg_transverse_y(inputs::InputStruct, k::Complex128, m::Int)::
-    Tuple{Complex128, Array{Complex128,1}}
+    Tuple{Complex128, Array{Complex128,1}, Array{Complex128,1}}
 
 bc = inputs.bc  #inputs = deepcopy(inputs1)
 
@@ -271,10 +273,11 @@ nev = 4 + 2*inputs.channels[m].tqn
     φ_temp = φ_temp*( conj(φ_temp[ind])/abs(φ_temp[ind]) ) #makes field positive at wg_pos_ind
     φ_temp = φ_temp/sqrt(sum(φ_temp.*ε_sm.*φ_temp)*inputs.dx̄[2])
    φy = repmat(φ_temp',inputs.N_ext[1],1)[:]
+   ε_sm = repmat(ε,inputs.N_ext[1],1)[:]
 
    inputs.bc[3] = bc[3]
  inputs.bc[4] = bc[4]
-    return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy)
+    return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy,ε_sm)
 end
 
 function subPixelSmoothing(X::Array{Float64,1}, X_ext::Array{Float64,1}, ∂R::Array{Float64,1},
