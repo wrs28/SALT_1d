@@ -270,7 +270,7 @@ nev = 4 + 2*inputs.channels[m].tqn
     φ_temp = φ[:,perm[inputs.channels[m].tqn]]
     φ_temp = φ_temp*( conj(φ_temp[ind])/abs(φ_temp[ind]) ) #makes field positive at wg_pos_ind
     φ_temp = φ_temp/sqrt(sum(φ_temp.*ε_sm.*φ_temp)*inputs.dx̄[2])
-   φy = repmat(φ_temp,inputs.N_ext[1],1)[:]
+   φy = repmat(φ_temp',inputs.N_ext[1],1)[:]
 
    inputs.bc[3] = bc[3]
  inputs.bc[4] = bc[4]
