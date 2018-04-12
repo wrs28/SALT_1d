@@ -3,7 +3,7 @@
 j, ∇² = synthesize_source(inputs, k)
 """
 function synthesize_source(inputs::InputStruct, k::Complex128)::
-    Tuple{Array{Complex128,1},SparseMatrixCSC{Complex128,Int64}}
+    Tuple{Array{Complex128,1},SparseMatrixCSC{Complex128,Int64}, Array{Complex128,1}}
 
     N = prod(inputs.N_ext)
     φ₊ = zeros(Complex128,N)
@@ -33,7 +33,7 @@ function synthesize_source(inputs::InputStruct, k::Complex128)::
 
     j = (∇²+ɛk²)*(M₊.*φ₊ + M₋.*φ₋)
 
-    return j, ∇²
+    return j, ∇², ε_sm
 end
 
 
@@ -274,11 +274,10 @@ nev = 4 + 2*inputs.channels[m].tqn
     φ_temp = φ_temp/sqrt(sum(φ_temp.*ε_sm.*φ_temp)*inputs.dx̄[2])
    φy = repmat(φ_temp',inputs.N_ext[1],1)[:]
    ε_sm = repmat(ε_sm[:],inputs.N_ext[1],1)[:]
-println(size(ε_sm))
-println(typeof(ε_sm))
+
    inputs.bc[3] = bc[3]
  inputs.bc[4] = bc[4]
-    return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy, ε_sm.')
+    return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy, ε_sm)
 end
 
 function subPixelSmoothing(X::Array{Float64,1}, X_ext::Array{Float64,1}, ∂R::Array{Float64,1},
