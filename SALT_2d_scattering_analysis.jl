@@ -262,7 +262,7 @@ N = inputs.N_ext[2]
 k² = k^2
 # @time    ε_sm = real(inputs.ε_sm[inputs.x₁_inds[1],:])
 εk² = sparse(1:N, 1:N, ε_sm[:]*k², N, N, +)
-∇₁², ∇₂² = SALT_2d_plus.SALT_2d.laplacians(k,inputs)
+∇₁², ∇₂² = laplacians(k,inputs)
 
 nev = 4 + 2*inputs.channels[m].tqn
      kₓ²,φ = eigs(∇₂²+εk², nev=nev, sigma=3*k², which = :LM)
