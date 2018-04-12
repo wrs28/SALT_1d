@@ -12,7 +12,7 @@ function synthesize_source(inputs::InputStruct, k::Complex128)::
     φt₋ = zeros(Complex128,N)
 
     M₊, M₋ = source_mask(inputs)
-    ε_sm = zeros(inputs1.ε_sm)
+    ε_sm = zeros(inputs.ε_sm)
     for m in 1:length(inputs.channels)
         φt₊, φt₋,ε_t = incident_modes(inputs, k, m)
         ε_sm += ε_t
