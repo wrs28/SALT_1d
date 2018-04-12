@@ -13,13 +13,13 @@ function synthesize_source(inputs::InputStruct, k::Complex128)::
 
     M₊, M₋ = source_mask(inputs)
     ε_sm = zeros(inputs.ε_sm[:])
-    @time for m in 1:length(inputs.channels)
-        φt₊, φt₋, ε_t = incident_modes(inputs, k, m)
-        ε_sm += ε_t
-        φ₊ += inputs.a[m]*φt₊
-        φ₋ += inputs.a[m]*φt₋
+     for m in 1:length(inputs.channels)
+    @time    φt₊, φt₋, ε_t = incident_modes(inputs, k, m)
+        @time ε_sm += ε_t
+@time        φ₊ += inputs.a[m]*φt₊
+@time        φ₋ += inputs.a[m]*φt₋
     end
-    ε_sm += 1-length(inputs.channels)
+@time    ε_sm += 1-length(inputs.channels)
     @time ∇² = laplacian(k,inputs)
 
     # inputs1 = deepcopy(inputs)
