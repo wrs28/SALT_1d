@@ -14,13 +14,13 @@ function synthesize_source(inputs::InputStruct, k::Complex128)::
     M₊, M₋ = source_mask(inputs)
     ε_sm = zeros(inputs.ε_sm[:])
      for m in 1:length(inputs.channels)
-    @time    φt₊, φt₋, ε_t = incident_modes(inputs, k, m)
-        @time ε_sm += ε_t
-@time        φ₊ += inputs.a[m]*φt₊
-@time        φ₋ += inputs.a[m]*φt₋
+        φt₊, φt₋, ε_t = incident_modes(inputs, k, m)
+        ε_sm += ε_t
+        φ₊ += inputs.a[m]*φt₊
+        φ₋ += inputs.a[m]*φt₋
     end
-@time    ε_sm += 1-length(inputs.channels)
-    @time ∇² = laplacian(k,inputs)
+    ε_sm += 1-length(inputs.channels)
+    ∇² = laplacian(k,inputs)
 
     # inputs1 = deepcopy(inputs)
     # inputs1.n₁_vals[inputs1.n₁_inds[inputs1.scatteringRegions]] = 1.
@@ -29,9 +29,9 @@ function synthesize_source(inputs::InputStruct, k::Complex128)::
 
     k² = k^2
     # ɛk² = sparse(1:N, 1:N, inputs1.ɛ_sm[:]*k², N, N, +)
-    @time ɛk² = sparse(1:N, 1:N, ɛ_sm[:]*k², N, N, +)
+    ɛk² = sparse(1:N, 1:N, ɛ_sm[:]*k², N, N, +)
 
-    @time j = (∇²+ɛk²)*(M₊.*φ₊ + M₋.*φ₋)
+    j = (∇²+ɛk²)*(M₊.*φ₊ + M₋.*φ₋)
 
     return j, ∇², ε_sm
 end
