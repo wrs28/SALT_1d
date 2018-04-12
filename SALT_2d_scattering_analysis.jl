@@ -274,10 +274,11 @@ nev = 4 + 2*inputs.channels[m].tqn
     φ_temp = φ_temp/sqrt(sum(φ_temp.*ε_sm.*φ_temp)*inputs.dx̄[2])
    φy = repmat(φ_temp',inputs.N_ext[1],1)[:]
    ε_sm = repmat(ε_sm[:],inputs.N_ext[1],1)[:]
-
+print(size(ε_sm))
+print(typeof(ε_sm))
    inputs.bc[3] = bc[3]
  inputs.bc[4] = bc[4]
-    return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy,ε_sm')
+    return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy, ε_sm')
 end
 
 function subPixelSmoothing(X::Array{Float64,1}, X_ext::Array{Float64,1}, ∂R::Array{Float64,1},
