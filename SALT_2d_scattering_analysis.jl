@@ -202,7 +202,7 @@ end
 """
 kᵤ, φᵤ = wg_transverse_y(inputs, m, y)
 """
-function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
+function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int,dummy::Bool)::
     Tuple{Complex128, Array{Complex128,1}}
 
     inputs = open_to_pml_out(inputs1, true)
@@ -232,6 +232,115 @@ function wg_transverse_y(inputs1::InputStruct, k::Complex128, m::Int)::
     φy = φy/sqrt(sum(φ_temp.*ε_sm.*φ_temp)*inputs.dx̄[2])
     return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy)
 end
+function wg_transverse_y(inputs::InputStruct, k::Complex128, m::Int)::
+    Tuple{Complex128, Array{Complex128,1}}
+
+bc = inputs.bc  #inputs = deepcopy(inputs1)
+
+inputs.bc[3] = "O"
+inputs.bc[4] = "O"
+
+wg_pos_ind = 3
+ind = find( (inputs.r_ext.==(8+inputs.channels[m].wg) )[1,:])[wg_pos_ind]
+
+r = whichRegion(inputs.x₂_ext, inputs.∂R,
+    inputs.geometry, inputs.geoParams, inputs.wgd,
+    inputs.wgp, inputs.wgt)
+ε_sm,F_sm,r = subPixelSmoothing(inputs.x₂, inputs.x₂_ext, inputs.∂R,
+    inputs.ɛ_ext, inputs.F_ext, inputs.subPixelNum,
+    false, r, inputs.geometry, inputs.geoParams,
+    inputs.wgd, inputs.wgp, inputs.wgt)
+
+#     fields = [:wgd,:wgn,:wgt,:wgp]
+#     vals = [ String[inputs.wgd[inputs.channels[m].wg]],
+#              Float64[inputs.wgn[inputs.channels[m].wg]],
+#              Float64[inputs.wgt[inputs.channels[m].wg]],
+#              Float64[inputs.wgp[inputs.channels[m].wg]],0]
+# @time     updateInputs!(inputs,fields,vals)
+
+N = inputs.N_ext[2]
+k² = k^2
+# @time    ε_sm = real(inputs.ε_sm[inputs.x₁_inds[1],:])
+εk² = sparse(1:N, 1:N, ε_sm[:]*k², N, N, +)
+∇₁², ∇₂² = SALT_2d_plus.SALT_2d.laplacians(k,inputs)
+
+nev = 4 + 2*inputs.channels[m].tqn
+     kₓ²,φ = eigs(∇₂²+εk², nev=nev, sigma=3*k², which = :LM)
+     perm = sortperm(kₓ²; by = x -> real(sqrt.(x)), rev=true)
+    φ_temp = φ[:,perm[inputs.channels[m].tqn]]
+    φ_temp = φ_temp*( conj(φ_temp[ind])/abs(φ_temp[ind]) ) #makes field positive at wg_pos_ind
+    φ_temp = φ_temp/sqrt(sum(φ_temp.*ε_sm.*φ_temp)*inputs.dx̄[2])
+   φy = repmat(φ_temp,inputs.N_ext[1],1)[:]
+
+   inputs.bc[3] = bc[3]
+ inputs.bc[4] = bc[4]
+    return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy)
+end
+
+function subPixelSmoothing(X::Array{Float64,1}, X_ext::Array{Float64,1}, ∂R::Array{Float64,1},
+    ɛ::Array{Complex{Float64},1}, F::Array{Float64,1}, subPixelNum::Int,
+    truncate::Bool, r::Array{Int,1}, geometry::Function, geoParams::Array{Float64,1},
+    wgd::Array{String,1}, wgp::Array{Float64,1}, wgt::Array{Float64,1})::
+    Tuple{Array{Complex128,1},Array{Float64,1},Array{Int,1}}
+
+    if truncate
+        x = X
+    else
+        x = X_ext
+    end
+
+    if isempty(r)
+        r = whichRegion(x, ∂R, geometry, geoParams, wgd, wgp, wgt)
+    end
+
+    ɛ_smoothed = deepcopy(ɛ[r])
+    F_smoothed = deepcopy(F[r])
+
+    for i in 2:(length(x[1])-1)
+
+        ( nearestNeighborFlag = (r[i]!==r[i+1]) | (r[i]!==r[i-1]) )
+
+        if nearestNeighborFlag
+
+            x_min = (x[1][i]+x[1][i-1])/2
+
+            x_max = (x[1][i]+x[1][i+1])/2
+
+            X = Array(linspace(x_min,x_max,subPixelNum))
+
+            subRegion = whichRegion(X, ∂R, geometry, geoParams, wgd, wgp, wgt)
+            ɛ_smoothed[i] = mean(ɛ[subRegion])
+            F_smoothed[i] = mean(F[subRegion])
+
+        end
+
+    end
+
+    return ɛ_smoothed, F_smoothed, r
+end # end of function subpixelSmoothing_core
+
+
+
+function whichRegion(x::Array{Float64,1}, ∂R::Array{Float64,1},
+    geometry::Function, geoParams::Array{Float64,1}, wgd::Array{String,1},
+    wgp::Array{Float64,1}, wgt::Array{Float64,1})::Array{Int,1}
+
+    region = zeros(Int,length(x))
+
+    for i in 1:length(x)
+
+        region[i] = 8 + length(wgd) + 1
+
+        for w in 1:length(wgd)
+            if wgp[w]-wgt[w]/2 < x[i] < wgp[w]+wgt[w]/2
+                region[i] = 8 + w
+            end
+        end
+    end
+
+    return region
+end # end of function whichRegion
+
 
 
 """
