@@ -15,8 +15,6 @@ function synthesize_source(inputs::InputStruct, k::Complex128)::
     ε_sm = zeros(inputs.ε_sm[:])
     for m in 1:length(inputs.channels)
         φt₊, φt₋, ε_t = incident_modes(inputs, k, m)
-        println(size(ε_sm))
-                println(size(ε_t))
         ε_sm += ε_t
         φ₊ += inputs.a[m]*φt₊
         φ₋ += inputs.a[m]*φt₋
@@ -279,7 +277,7 @@ nev = 4 + 2*inputs.channels[m].tqn
 
    inputs.bc[3] = bc[3]
  inputs.bc[4] = bc[4]
-    return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy,ε_sm)
+    return (sqrt.(kₓ²[perm[inputs.channels[m].tqn]]), φy,ε_sm')
 end
 
 function subPixelSmoothing(X::Array{Float64,1}, X_ext::Array{Float64,1}, ∂R::Array{Float64,1},
