@@ -90,20 +90,20 @@ function compute_scatter_linear(inputs1::InputStruct, k::Complex128;
     A::Base.SparseArrays.UMFPACK.UmfpackLU=lufact(speye(1,1)),
     F::Array{Float64,1}=[1.])Tuple{Array{Complex128,1},Base.SparseArrays.UMFPACK.UmfpackLU,InputStruct}
 
-    inputs = open_to_pml_out(inputs1)
+    @time inputs = open_to_pml_out(inputs1)
 
     k²= k^2
 
-    j, ∇² = synthesize_source(inputs, k)
+    @time  j, ∇² = synthesize_source(inputs, k)
 
     if (A.m == A.n == 1)
-        N = prod(inputs.N_ext); ε_sm = inputs.ε_sm; F_sm = inputs.F_sm
-        ɛk² = sparse(1:N, 1:N, ɛ_sm[:]*k², N, N, +)
-        χk² = sparse(1:N, 1:N, inputs.D₀*γ(k,inputs)*F.*F_sm[:]*k², N, N, +)
-        A = factorize(∇²+ɛk²+χk²)
+        @time N = prod(inputs.N_ext); ε_sm = inputs.ε_sm; F_sm = inputs.F_sm
+        @time ɛk² = sparse(1:N, 1:N, ɛ_sm[:]*k², N, N, +)
+        @time χk² = sparse(1:N, 1:N, inputs.D₀*γ(k,inputs)*F.*F_sm[:]*k², N, N, +)
+        @time A = factorize(∇²+ɛk²+χk²)
     end
 
-    ψ = A\j
+    @time ψ = A\j
 
     return ψ, A, inputs
 end # end of function computePsi_linear
