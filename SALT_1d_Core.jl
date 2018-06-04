@@ -6,9 +6,9 @@ export InputStruct, laplacian, whichRegion, trapz, dirac_δ, heaviside_Θ, subpi
 
 
 """
-inputs = Inputs(ω, ω₀, k, k₀, N, ℓ, dx, x_ext, x_inds, ∂, ɛ, F, N_ext, ℓ_ext, ∂_ext, ɛ_ext, F_ext, x, xᵨ₋, xᵨ₊, γ⟂, D₀, a, b, Γ, dN, bc, subPixelNum, r_ext, ɛ_sm, F_sm)
-
+inputs = Inputs(ω, ω₀, k, k₀, N, ℓ, dx, x_ext, x_inds, ∂, ɛ, F, N_ext, ℓ_ext, ∂ext, ɛ_ext, F_ext, x, xᵨ₋, xᵨ₊, γ⟂, D₀, a, b, Γ, dN, bc, subPixelNum, r_ext, ɛ_sm, F_sm)
 """
+
 mutable struct InputStruct
     ω::Array{Complex128,1}
     ω₀::Complex128
